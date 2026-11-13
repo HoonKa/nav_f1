@@ -862,6 +862,7 @@ $("btnSettings").onclick=()=>{ $("settings").classList.toggle("hidden"); $("resu
 const TR=NATIVE?window.Capacitor.registerPlugin("TmapReader"):null, trItems=[];
 function trRender(){ if(trItems.length) $("trLog").textContent=trItems.slice(-15).map((t,i)=>"── "+(i+1)+" ──\n"+t).join("\n"); }
 async function trStatus(){ if(!TR) return; try{ const st=await TR.status(); $("trState").textContent=st.enabled?"✅ 켜짐":"(꺼짐)"; }catch(e){ $("trState").textContent="(이 앱 버전엔 없음 · 새 APK 필요)"; } }
+if(!TR && /; wv\)/.test(navigator.userAgent)){ $("trBox").classList.remove("hidden"); $("trState").textContent="(앱 연결 안 됨 · 앱을 완전히 껐다 켜 주세요)"; }
 if(TR){
   $("trBox").classList.remove("hidden");
   try{ TR.addListener("snapshot",o=>{ trItems.push(o.text); if(trItems.length>40) trItems.shift(); trRender(); }); }catch(e){}
@@ -911,7 +912,12 @@ function startGeo(){
   },{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }
 // 앱 설치 (안드로이드 크롬)
-if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+// 안드로이드 앱(WebView) 안에서는 서비스워커가 앱 연결(Capacitor)을 가로막으므로 쓰지 않는다
+const IN_APP_WV=/; wv\)/.test(navigator.userAgent)||NATIVE;
+if("serviceWorker" in navigator){
+  if(IN_APP_WV) navigator.serviceWorker.getRegistrations().then(rs=>{ if(!rs.length) return; Promise.all(rs.map(r=>r.unregister())).then(()=>{ try{ if(!sessionStorage.getItem("pw_swfix")){ sessionStorage.setItem("pw_swfix","1"); location.reload(); } }catch(e){} }); }).catch(()=>{});
+  else navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
 let installEvt=null;
 window.addEventListener("beforeinstallprompt",e=>{ if(NATIVE) return; e.preventDefault(); installEvt=e; $("btnInstall").classList.remove("hidden"); });
 window.addEventListener("appinstalled",()=>{ $("btnInstall").classList.add("hidden"); });

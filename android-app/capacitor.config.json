@@ -1,0 +1,13 @@
+{
+  "appId": "io.github.hoonka.pitwall",
+  "appName": "PitWall",
+  "webDir": "www",
+  "server": {
+    "url": "https://hoonka.github.io/nav_f1/",
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#0b0c10",
+    "useLegacyBridge": true
+  }
+}

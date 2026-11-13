@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PitWall</string>
+    <string name="title_activity_main">PitWall</string>
+    <string name="package_name">io.github.hoonka.pitwall</string>
+    <string name="custom_url_scheme">io.github.hoonka.pitwall</string>
+    <string name="capacitor_background_geolocation_notification_channel_name">레이스 안내</string>
+    <string name="capacitor_background_geolocation_notification_color">#E10600</string>
+</resources>

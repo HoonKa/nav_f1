@@ -276,6 +276,10 @@ const Engine = {
   }
 };
 
+/* 안드로이드 앱(WebView)에는 브라우저 음성합성이 없어서 빈 대역을 둠 */
+const SS=window.speechSynthesis||{getVoices(){return[];},speak(){},cancel(){}};
+const NATIVE=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+
 /* ================= AI 음성 팩 (voice/manifest.json) ================= */
 // 문장을 [고정 문구 | 거리 | 턴 번호 | 시간] 조각으로 나눠, 미리 만든 AI 음성 클립을 이어 붙여 재생
 const SEG_RE=/(턴 \d+|섹터 \d+|\d+(?:\.\d+)?킬로미터|\d+미터|\d+분|\d+초)/;
@@ -304,12 +308,12 @@ const VoicePack={
 const Radio = {
   q:[], busy:false, voice:null,
   init(){
-    const pickV=()=>{const vs=speechSynthesis.getVoices();this.voice=vs.find(v=>/ko[-_]KR/i.test(v.lang))||null;};
-    pickV(); speechSynthesis.onvoiceschanged=pickV;
+    const pickV=()=>{const vs=SS.getVoices();this.voice=vs.find(v=>/ko[-_]KR/i.test(v.lang))||null;};
+    pickV(); SS.onvoiceschanged=pickV;
   },
   // text: 문자열 또는 말할 시점에 문구를 만드는 함수(null이면 건너뜀). prio 2 = 경로 안내
   say(text, urgent=false, prio=1){
-    if(urgent){ this.q=[]; speechSynthesis.cancel(); this.busy=false; }
+    if(urgent){ this.q=[]; SS.cancel(); this.busy=false; }
     if(prio>=2) this.q=this.q.filter(x=>x.prio>=2);
     else if(this.q.length>1) return;
     this.q.push({text,prio}); this.next();
@@ -332,13 +336,14 @@ const Radio = {
     this.tts(text);
   },
   tts(text,finCb){
+    if(!window.SpeechSynthesisUtterance){ setTimeout(finCb||(()=>{ Engine.chirp("out"); $("radio").classList.remove("on"); Engine.setDuck(false); this.busy=false; this.next(); }),1500+text.length*80); return; }
     setTimeout(()=>{
       const u=new SpeechSynthesisUtterance(text.replace(/[—…]/g,", "));
       u.lang="ko-KR"; if(this.voice) u.voice=this.voice; u.rate=1.12; u.pitch=.95;
       let done=false; const fin=finCb||(()=>{ if(done) return; done=true; Engine.chirp("out"); $("radio").classList.remove("on"); Engine.setDuck(false);
         setTimeout(()=>{this.busy=false;this.next();},350); });
       u.onend=fin; u.onerror=fin; setTimeout(fin, 2500+text.length*160); // 안전장치
-      speechSynthesis.speak(u);
+      SS.speak(u);
     },260);
   }
 };
@@ -671,7 +676,15 @@ async function startReal(){
   }
   stopRun(); resetRace(S.route); S.mode="real"; S.limit=+$("limit").value; boot();
   S.lastFix=null;
-  S.watchId=navigator.geolocation.watchPosition(onFix,()=>{}, {enableHighAccuracy:true,maximumAge:1000});
+  if(NATIVE){
+    // 안드로이드 앱: 화면이 꺼져도 위치를 계속 받는 백그라운드 위치 (알림창에 '레이스 안내 중' 표시)
+    try{
+      const BG=window.Capacitor.registerPlugin("BackgroundGeolocation");
+      S.bgId=await BG.addWatcher({backgroundTitle:"PitWall 레이스 안내 중",backgroundMessage:"화면이 꺼져도 무전 안내가 계속돼요",requestPermissions:true,stale:false,distanceFilter:3},
+        (loc,err)=>{ if(loc) onFix({coords:{latitude:loc.latitude,longitude:loc.longitude,speed:loc.speed,accuracy:loc.accuracy}}); });
+      S.bg=BG;
+    }catch(e){ S.watchId=navigator.geolocation.watchPosition(onFix,()=>{}, {enableHighAccuracy:true,maximumAge:1000}); }
+  } else S.watchId=navigator.geolocation.watchPosition(onFix,()=>{}, {enableHighAccuracy:true,maximumAge:1000});
   let last=performance.now();
   S.timer=setInterval(()=>{const now=performance.now();S.elapsed+=(now-last)/1000;last=now; if(S.lastFix) tick(S.lastFix.p);},250);
 }
@@ -680,6 +693,7 @@ async function onFix(pos){
   const p=[pos.coords.latitude,pos.coords.longitude], now=performance.now();
   let v=pos.coords.speed; if(v==null||isNaN(v)) v=S.lastFix?hav(S.lastFix.p,p)/Math.max(.5,(now-S.lastFix.t)/1000):0;
   S.throttle=v>S.v+.5?1:0; S.v=S.v*.4+v*.6; S.lastFix={p,t:now};
+  if(document.hidden&&S.timer) setTimeout(()=>tick(p),0); // 화면 꺼짐(앱)일 때는 위치가 올 때마다 안내 갱신
   const pr=project(S.route,p,S.s-150,S.s+1500);
   if(pr.d>45 && pos.coords.accuracy<40) S.offCount++; else { S.offCount=0; S.s=Math.max(S.s,pr.along); }
   if(S.offCount>=3 && !S.rerouting){
@@ -691,11 +705,12 @@ async function onFix(pos){
 function stopRun(){
   clearInterval(S.timer); S.timer=null;
   if(S.watchId!=null){ navigator.geolocation.clearWatch(S.watchId); S.watchId=null; }
+  if(S.bg&&S.bgId){ S.bg.removeWatcher({id:S.bgId}).catch(()=>{}); S.bgId=null; }
   if(S.wake){ S.wake.release().catch(()=>{}); S.wake=null; }
   Engine.setRunning(false); S.v=0;
 }
 function endNav(){
-  stopRun(); speechSynthesis.cancel(); Radio.q=[]; Radio.busy=false; $("radio").classList.remove("on"); Engine.setDuck(false);
+  stopRun(); SS.cancel(); Radio.q=[]; Radio.busy=false; $("radio").classList.remove("on"); Engine.setDuck(false);
   S.route=null; S.done=false; clearRoute(); map.removeLayer(car); view("idle");
   if(S.here) map.setView(S.here,15);
 }
@@ -761,7 +776,7 @@ async function doSearch(){
 }
 async function choose(dest){
   Engine.resume(); // 첫 터치에서 오디오 잠금 해제 (iOS)
-  try{ speechSynthesis.speak(new SpeechSynthesisUtterance("")); }catch(e){}
+  try{ SS.speak(new SpeechSynthesisUtterance("")); }catch(e){}
   $("results").classList.add("hidden"); $("q").blur();
   S.dest=dest; view("preview");
   $("pName").textContent=dest.name; $("pAddr").textContent=dest.addr; $("pSum").textContent="경로 계산 중…";
@@ -796,7 +811,9 @@ document.addEventListener("visibilitychange",async()=>{ if(document.visibilitySt
 const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent);
 function geoHelp(show){
   const h=$("geoHelp"); h.classList.toggle("hidden",!show); if(!show) return;
-  h.innerHTML = isIOS
+  h.innerHTML = NATIVE
+    ? "<b>앱 위치 권한 켜는 법</b><br>① 화면 위에서 아래로 내려서 <b>위치(GPS) 켜기</b><br>② 폰 설정 → 애플리케이션 → <b>PitWall</b> → 권한 → 위치 → <b>앱 사용 중에만 허용</b> + <b>정확한 위치 사용</b><br>③ 앱으로 돌아와서 '내 위치 찾기'"
+    : isIOS
     ? "<b>아이폰에서 위치 켜는 법</b><br>① 설정 앱 → 개인정보 보호 및 보안 → <b>위치 서비스 켜기</b><br>② 같은 화면 아래 <b>Safari 웹사이트</b>(크롬이면 Chrome) → <b>앱을 사용하는 동안</b> + <b>정확한 위치 켜기</b><br>③ 사파리 주소창 왼쪽 <b>가가(aA)</b> → 웹 사이트 설정 → 위치 → <b>허용</b><br>④ 이 페이지 새로고침 후 '내 위치 찾기'"
     : "<b>안드로이드에서 위치 켜는 법</b><br>① 화면 위에서 아래로 내려서 <b>위치(GPS) 켜기</b><br>② 크롬 주소창 왼쪽 <b>설정 아이콘(⚙ 또는 자물쇠)</b> → 권한 → <b>위치 허용</b><br>③ 이 페이지 새로고침 후 '내 위치 찾기'";
 }
@@ -820,7 +837,7 @@ function startGeo(){
 // 앱 설치 (안드로이드 크롬)
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 let installEvt=null;
-window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; $("btnInstall").classList.remove("hidden"); });
+window.addEventListener("beforeinstallprompt",e=>{ if(NATIVE) return; e.preventDefault(); installEvt=e; $("btnInstall").classList.remove("hidden"); });
 window.addEventListener("appinstalled",()=>{ $("btnInstall").classList.add("hidden"); });
 $("btnInstall").onclick=async()=>{ if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt=null; $("btnInstall").classList.add("hidden"); };
 $("btnLocate").onclick=()=>{ startGeo(); if(S.here) map.setView(S.here,16); };

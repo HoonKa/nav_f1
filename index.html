@@ -80,6 +80,9 @@ input,select{font:inherit;background:var(--panel2);color:var(--text);border:1px 
 .spd{width:78px;height:78px;flex:none;border-radius:50%;border:4px solid var(--accent);display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0008}
 .spd b{font-size:30px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
 .spd span{font-size:10px;color:var(--muted)}
+.cam{width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:#fff;border:3px solid #e10600;color:#111;font:800 10px/20px sans-serif;text-align:center;box-shadow:0 0 6px #000}
+.limit{position:absolute;margin:-6px 0 0 52px;width:34px;height:34px;border-radius:50%;background:#fff;border:3px solid #e10600;color:#111;font:900 12px/28px sans-serif;text-align:center}
+.spd{position:relative}
 .spd.over{border-color:var(--yellow)} .spd.over b{color:var(--yellow)}
 .eta{flex:1;min-width:0}
 .eta .a{font-size:22px;font-weight:900;font-variant-numeric:tabular-nums}
@@ -174,7 +177,7 @@ button.b.stop{background:#3a1416;color:#ff8a80}
   <div id="driveSheet" class="card hidden">
     <div class="lights" id="lights"></div>
     <div class="dash">
-      <div class="spd" id="spdBox"><b id="spd">0</b><span>km/h</span></div>
+      <div class="spd" id="spdBox"><b id="spd">0</b><span>km/h</span><div class="limit hidden" id="limBadge"></div></div>
       <div class="eta"><div class="a" id="eta">--:-- 도착</div><div class="r" id="left">—</div></div>
       <div class="gear"><b id="gear">N</b><span id="rpm">0 rpm</span></div>
     </div>
@@ -425,6 +428,11 @@ const Lines = {
     "merge":["합류 깔끔했어."],
     "roundabout":["시케인 통과. 좋아."],"rotary":["시케인 통과. 좋아."]
   },
+  camFar:(d,lim)=>pick([`${d} 앞 스피드 트랩. 제한 속도 ${lim}.`,`스피드 트랩 접근. ${d} 앞, 제한 ${lim}.`]),
+  camOver:(lim)=>pick([`스피드 트랩! 제한 ${lim}이야. 지금 페이스 낮춰!`,`스피드 트랩 바로 앞! 제한 ${lim}. 브레이크!`]),
+  camOk:["스피드 트랩 통과. 깔끔해.","트랩 통과. 좋아."],
+  secStart:(lim)=>pick([`구간 단속 시작. 제한 ${lim}. 평균 속도 관리해.`]),
+  secEnd:["구간 단속 끝. 수고했어."],
   finalLap:(d)=>pick([`파이널 랩이야. 목적지까지 ${d}. 체커기가 보인다.`,`마지막 섹터. 피니시 라인 ${d} 앞. 끝까지 집중해.`]),
   finish:(time)=>pick([`체커기! 목적지 도착. 피 원, 피 원! 기록은 ${time}. 정말 대단한 레이스였어.`,`체커기 받았어! 도착이야. 기록 ${time}. 팀 전체가 자랑스러워해.`]),
   sector:(n)=>pick([`섹터 ${n} 통과. 퍼플 섹터야!`,`섹터 ${n} 그린. 페이스 좋아.`,`섹터 ${n} 클리어. 이대로만 가자.`]),
@@ -575,6 +583,22 @@ let follow=true;
 map.on("dragstart",()=>{ if(S.timer){ follow=false; $("recenter").classList.remove("hidden"); } });
 $("recenter").onclick=()=>{ follow=true; $("recenter").classList.add("hidden"); if(S.route) map.setView(posAt(S.route,S.s),17); };
 
+/* ---------- 과속 단속 카메라 (경찰청 공공데이터, cameras.json) ---------- */
+let CAMS=null;
+const camsReady=fetch("cameras.json").then(r=>r.json()).then(j=>{ CAMS=j.cams; }).catch(()=>{});
+let camLayer=null;
+async function attachCams(r){
+  await camsReady; r.cams=[]; if(!CAMS) return r;
+  let a=1e9,b=-1e9,c=1e9,d=-1e9; for(const p of r.coords){a=Math.min(a,p[0]);b=Math.max(b,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1]);}
+  const pad=.003;
+  for(const [la,lo,lim,sect,prot] of CAMS){
+    if(la<a-pad||la>b+pad||lo<c-pad||lo>d+pad) continue;
+    const pr=project(r,[la,lo]); if(pr.d>22) continue; // 경로에서 22m 안쪽만
+    r.cams.push({along:pr.along,limit:lim,sect,prot,ll:[la,lo]});
+  }
+  r.cams.sort((x,y)=>x.along-y.along);
+  return r;
+}
 function drawRoute(r){
   [routeCase,routeLine,doneLine].forEach(l=>l&&map.removeLayer(l));
   routeCase=L.polyline(r.coords,{color:"#fff",weight:11,opacity:.9}).addTo(map);
@@ -584,8 +608,10 @@ function drawRoute(r){
   (r.traffic||[]).forEach(([a,b,c])=>{ if(TC[c]&&b>a) routeLine.addLayer(L.polyline(r.coords.slice(a,b+1),{color:TC[c],weight:7})); });
   doneLine=L.polyline([],{color:"#555b6b",weight:7}).addTo(map);
   destPin.setLatLng(r.coords[r.coords.length-1]).addTo(map);
+  if(camLayer) map.removeLayer(camLayer);
+  camLayer=L.layerGroup((r.cams||[]).map(c=>L.marker(c.ll,{interactive:false,icon:L.divIcon({className:"",iconSize:[0,0],html:`<div class="cam">${c.limit}</div>`})}))).addTo(map);
 }
-function clearRoute(){ [routeCase,routeLine,doneLine].forEach(l=>l&&map.removeLayer(l)); routeCase=routeLine=doneLine=null; map.removeLayer(destPin); }
+function clearRoute(){ if(camLayer){ map.removeLayer(camLayer); camLayer=null; } [routeCase,routeLine,doneLine].forEach(l=>l&&map.removeLayer(l)); routeCase=routeLine=doneLine=null; map.removeLayer(destPin); }
 
 /* ================= 상태 / 화면 전환 ================= */
 const S={route:null,mode:null,s:0,v:0,elapsed:0,mi:0,flags:{},sector:1,lastTalk:0,over:false,limit:60,offCount:0,
@@ -596,7 +622,7 @@ function view(name){
   if(name!=="drive"){ $("flag").classList.add("hidden"); $("recenter").classList.add("hidden"); }
 }
 function resetRace(route){
-  Object.assign(S,{route,s:0,v:0,elapsed:0,mi:0,flags:{},sector:1,lastTalk:performance.now(),over:false,offCount:0,done:false,hw:/고속|도시고속|고속화/.test(route.startName||"")});
+  Object.assign(S,{route,s:0,v:0,elapsed:0,mi:0,flags:{},ci:0,camFlags:{},inSect:0,sector:1,lastTalk:performance.now(),over:false,offCount:0,done:false,hw:/고속|도시고속|고속화/.test(route.startName||"")});
 }
 
 /* ================= 무전 안내 로직 ================= */
@@ -628,7 +654,26 @@ function announce(){
   if(d>800 && now-S.lastTalk>90000/mult && !Radio.busy) Radio.say(pick(Lines.chatter));
   if(Radio.busy) S.lastTalk=now;
   const kmh=S.v*3.6;
-  const lim=S.limit>0&&S.hw?Math.max(S.limit,100):S.limit; // 고속도로 구간은 100km/h 기준
+  // 스피드 트랩(단속 카메라)
+  const cams=r.cams||[]; S.camLim=0;
+  while(S.ci<cams.length && cams[S.ci].along < S.s-15){
+    const c=cams[S.ci], cf=S.camFlags[S.ci]||{};
+    if(c.sect===1){ S.inSect=c.limit; }
+    else if(c.sect===2){ if(S.inSect) Radio.say(pick(Lines.secEnd)); S.inSect=0; }
+    else if(cf.far && !cf.over && Math.random()<.5) Radio.say(pick(Lines.camOk));
+    S.ci++;
+  }
+  if(S.ci<cams.length){
+    const c=cams[S.ci], cd=c.along-S.s, cf=S.camFlags[S.ci]||(S.camFlags[S.ci]={});
+    const farC=S.hw?700:400, ci=S.ci;
+    if(cd<farC && !cf.far){ cf.far=1;
+      if(c.sect===1) Radio.say(Lines.secStart(c.limit),false,2);
+      else if(c.sect!==2) Radio.say(()=>{ const dd=cams[ci].along-S.s; return S.ci===ci&&dd>30?Lines.camFar(sayDist(dd),c.limit):null; },false,2); }
+    if(cd<300) S.camLim=c.limit;
+    if(cd<200 && !cf.over && c.sect!==2 && kmh>c.limit+2){ cf.over=1; Radio.say(Lines.camOver(c.limit),true,3); }
+  }
+  if(S.inSect) S.camLim=S.inSect;
+  const lim=S.camLim||(S.limit>0&&S.hw?Math.max(S.limit,100):S.limit); // 단속 카메라 제한속도 우선, 고속도로 구간은 100km/h 기준
   if(lim>0){
     if(kmh>lim+3 && !S.over){ S.over=true; if(now-(S.lastYellow||0)>30000/mult){ S.lastYellow=now; Radio.say(pick(Lines.yellow),false,2); } }
     if(S.over && kmh<lim-2) S.over=false;
@@ -672,7 +717,7 @@ async function startReal(){
   // 미리보기 때 다른 곳(서울시청 등)에서 출발하는 경로였다면 지금 위치에서 다시 계산
   if(hav(S.here,S.route.coords[0])>150){
     $("pSum").textContent="내 위치에서 경로 다시 계산 중…";
-    try{ S.route=await findRoute(S.here,S.dest); drawRoute(S.route); }catch(e){ $("pSum").textContent="경로를 다시 계산하지 못했어요."; return; }
+    try{ S.route=await attachCams(await findRoute(S.here,S.dest)); drawRoute(S.route); }catch(e){ $("pSum").textContent="경로를 다시 계산하지 못했어요."; return; }
   }
   stopRun(); resetRace(S.route); S.mode="real"; S.limit=+$("limit").value; boot();
   S.lastFix=null;
@@ -698,7 +743,7 @@ async function onFix(pos){
   if(pr.d>45 && pos.coords.accuracy<40) S.offCount++; else { S.offCount=0; S.s=Math.max(S.s,pr.along); }
   if(S.offCount>=3 && !S.rerouting){
     S.rerouting=true; Radio.say(pick(Lines.offroute),true,3);
-    try{ const r=await findRoute(p,S.dest); const el=S.elapsed; resetRace(r); S.elapsed=el; drawRoute(r); Radio.say(pick(Lines.rerouted),false,2); }catch(e){}
+    try{ const r=await attachCams(await findRoute(p,S.dest)); const el=S.elapsed; resetRace(r); S.elapsed=el; drawRoute(r); Radio.say(pick(Lines.rerouted),false,2); }catch(e){}
     S.rerouting=false; S.offCount=0;
   }
 }
@@ -746,6 +791,7 @@ function tick(pos){
   const ik=iconFor(m); if($("ico").dataset.k!==ik){ $("ico").dataset.k=ik; $("ico").innerHTML=`<svg viewBox="0 0 40 40" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="${ik}"/></svg>`; }
   // 계기판
   const kmh=Math.round(S.v*3.6);
+  $("limBadge").classList.toggle("hidden",!S.camLim); if(S.camLim) $("limBadge").textContent=S.camLim;
   $("spd").textContent=kmh; $("spdBox").classList.toggle("over",S.over); $("flag").classList.toggle("hidden",!S.over);
   $("gear").textContent=Engine.gear||"N"; $("rpm").textContent=(Math.round(Engine.rpm/100)*100).toLocaleString()+" rpm";
   const lit=Math.round(Math.max(0,(Engine.rpm-5000)/7000)*15);
@@ -783,10 +829,10 @@ async function choose(dest){
   $("btnGo").disabled=$("btnSim").disabled=true;
   const from=S.here||SEOUL;
   try{
-    const r=await findRoute(from,dest); S.route=r; drawRoute(r);
+    const r=await attachCams(await findRoute(from,dest)); S.route=r; drawRoute(r);
     map.fitBounds(L.latLngBounds(r.coords),{paddingTopLeft:[30,40],paddingBottomRight:[30,260]});
     const min=Math.round(r.duration/60);
-    $("pSum").innerHTML=`<b>${min>=60?Math.floor(min/60)+"시간 "+(min%60)+"분":min+"분"}</b> · ${fmtDist(r.total)} · 코너 ${r.maneuvers.length-1}개 <span class="prov ${r.provider==="tmap"?"tmap":""}">${r.provider==="tmap"?"티맵 · 실시간 교통":"오픈스트리트맵"}</span>`
+    $("pSum").innerHTML=`<b>${min>=60?Math.floor(min/60)+"시간 "+(min%60)+"분":min+"분"}</b> · ${fmtDist(r.total)} · 코너 ${r.maneuvers.length-1}개 · 📷 ${r.cams.length}개 <span class="prov ${r.provider==="tmap"?"tmap":""}">${r.provider==="tmap"?"티맵 · 실시간 교통":"오픈스트리트맵"}</span>`
       +(S.here?"":`<br><small style="color:var(--muted)">현재 위치를 못 받아서 서울시청에서 출발하는 경로예요.</small>`);
     $("btnSim").disabled=false; $("btnGo").disabled=false;
   }catch(e){ $("pSum").textContent=/tmap (401|403)/.test(e.message)?"티맵 키가 맞지 않아요. ⚙️ 설정에서 키를 확인해 주세요.":"경로를 찾지 못했어요. 다른 목적지로 시도해 주세요."; }

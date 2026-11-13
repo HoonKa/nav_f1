@@ -80,6 +80,7 @@ input,select{font:inherit;background:var(--panel2);color:var(--text);border:1px 
 .spd{width:78px;height:78px;flex:none;border-radius:50%;border:4px solid var(--accent);display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0008}
 .spd b{font-size:30px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
 .spd span{font-size:10px;color:var(--muted)}
+.cam.mob{background:#ffd400;border-color:#111;border-style:dashed;font-size:9px;letter-spacing:-1px}
 .cam{width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:#fff;border:3px solid #e10600;color:#111;font:800 10px/20px sans-serif;text-align:center;box-shadow:0 0 6px #000}
 .limit{position:absolute;margin:-6px 0 0 52px;width:34px;height:34px;border-radius:50%;background:#fff;border:3px solid #e10600;color:#111;font:900 12px/28px sans-serif;text-align:center}
 .spd{position:relative}
@@ -430,6 +431,7 @@ const Lines = {
   },
   camFar:(d,lim)=>pick([`${d} 앞 스피드 트랩. 제한 속도 ${lim}.`,`스피드 트랩 접근. ${d} 앞, 제한 ${lim}.`]),
   camOver:(lim)=>pick([`스피드 트랩! 제한 ${lim}이야. 지금 페이스 낮춰!`,`스피드 트랩 바로 앞! 제한 ${lim}. 브레이크!`]),
+  mobFar:(d,lim)=>lim?pick([`${d} 앞 이동식 트랩 출몰 지점. 제한 ${lim}, 페이스 체크해.`]):pick([`${d} 앞 이동식 트랩 출몰 지점. 페이스 체크해.`,`이동식 트랩 자주 나오는 곳이야. ${d} 앞, 페이스 체크해.`]),
   camOk:["스피드 트랩 통과. 깔끔해.","트랩 통과. 좋아."],
   secStart:(lim)=>pick([`구간 단속 시작. 제한 ${lim}. 평균 속도 관리해.`]),
   secEnd:["구간 단속 끝. 수고했어."],
@@ -585,7 +587,10 @@ $("recenter").onclick=()=>{ follow=true; $("recenter").classList.add("hidden"); 
 
 /* ---------- 과속 단속 카메라 (경찰청 공공데이터, cameras.json) ---------- */
 let CAMS=null;
-const camsReady=fetch("cameras.json").then(r=>r.json()).then(j=>{ CAMS=j.cams; }).catch(()=>{});
+let MOBS=null; // 이동식 단속 지점 (충북·제주 경찰청 공개분만 있음)
+const camsReady=Promise.all([
+  fetch("cameras.json").then(r=>r.json()).then(j=>{ CAMS=j.cams; }).catch(()=>{}),
+  fetch("mobile.json").then(r=>r.json()).then(j=>{ MOBS=j.spots; }).catch(()=>{})]);
 let camLayer=null;
 async function attachCams(r){
   await camsReady; r.cams=[]; if(!CAMS) return r;
@@ -595,6 +600,12 @@ async function attachCams(r){
     if(la<a-pad||la>b+pad||lo<c-pad||lo>d+pad) continue;
     const pr=project(r,[la,lo]); if(pr.d>22) continue; // 경로에서 22m 안쪽만
     r.cams.push({along:pr.along,limit:lim,sect,prot,ll:[la,lo]});
+  }
+  for(const [la,lo,lim] of MOBS||[]){
+    if(la<a-pad||la>b+pad||lo<c-pad||lo>d+pad) continue;
+    const pr=project(r,[la,lo]); if(pr.d>40) continue; // 길가 부스라 조금 넓게
+    if(r.cams.some(x=>Math.abs(x.along-pr.along)<150)) continue; // 고정 카메라와 겹치면 생략
+    r.cams.push({along:pr.along,limit:lim,sect:0,mob:1,ll:[la,lo]});
   }
   r.cams.sort((x,y)=>x.along-y.along);
   return r;
@@ -609,7 +620,7 @@ function drawRoute(r){
   doneLine=L.polyline([],{color:"#555b6b",weight:7}).addTo(map);
   destPin.setLatLng(r.coords[r.coords.length-1]).addTo(map);
   if(camLayer) map.removeLayer(camLayer);
-  camLayer=L.layerGroup((r.cams||[]).map(c=>L.marker(c.ll,{interactive:false,icon:L.divIcon({className:"",iconSize:[0,0],html:`<div class="cam">${c.limit}</div>`})}))).addTo(map);
+  camLayer=L.layerGroup((r.cams||[]).map(c=>L.marker(c.ll,{interactive:false,icon:L.divIcon({className:"",iconSize:[0,0],html:c.mob?`<div class="cam mob">이동</div>`:`<div class="cam">${c.limit}</div>`})}))).addTo(map);
 }
 function clearRoute(){ if(camLayer){ map.removeLayer(camLayer); camLayer=null; } [routeCase,routeLine,doneLine].forEach(l=>l&&map.removeLayer(l)); routeCase=routeLine=doneLine=null; map.removeLayer(destPin); }
 
@@ -668,9 +679,9 @@ function announce(){
     const farC=S.hw?700:400, ci=S.ci;
     if(cd<farC && !cf.far){ cf.far=1;
       if(c.sect===1) Radio.say(Lines.secStart(c.limit),false,2);
-      else if(c.sect!==2) Radio.say(()=>{ const dd=cams[ci].along-S.s; return S.ci===ci&&dd>30?Lines.camFar(sayDist(dd),c.limit):null; },false,2); }
-    if(cd<300) S.camLim=c.limit;
-    if(cd<200 && !cf.over && c.sect!==2 && kmh>c.limit+2){ cf.over=1; Radio.say(Lines.camOver(c.limit),true,3); }
+      else if(c.sect!==2) Radio.say(()=>{ const dd=cams[ci].along-S.s; return S.ci===ci&&dd>30?(c.mob?Lines.mobFar:Lines.camFar)(sayDist(dd),c.limit):null; },false,2); }
+    if(cd<300 && c.limit) S.camLim=c.limit;
+    if(cd<200 && !cf.over && c.sect!==2 && c.limit && kmh>c.limit+2){ cf.over=1; Radio.say(Lines.camOver(c.limit),true,3); }
   }
   if(S.inSect) S.camLim=S.inSect;
   const lim=S.camLim||(S.limit>0&&S.hw?Math.max(S.limit,100):S.limit); // 단속 카메라 제한속도 우선, 고속도로 구간은 100km/h 기준

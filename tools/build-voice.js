@@ -37,8 +37,8 @@ for (const type of TYPES) for (const modifier of MODS) for (const exit of [1, 2,
   add(callout({ type, modifier, exit, name: "" }, stage, "500미터", 1));
 for (const k of ["start", "after", "chatter", "yellow", "green", "offroute", "rerouted"]) add(Lines[k]);
 Object.values(Lines.afterType).forEach(add);
-for (const lim of [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]) { add(Lines.camFar("400미터", lim)); add(Lines.camOver(lim)); add(Lines.secStart(lim)); }
-add(Lines.camOk); add(Lines.secEnd);
+for (const lim of [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]) { add(Lines.camFar("400미터", lim)); add(Lines.mobFar("400미터", lim)); add(Lines.camOver(lim)); add(Lines.secStart(lim)); }
+add(Lines.mobFar("400미터", 0)); add(Lines.camOk); add(Lines.secEnd);
 add(Lines.finalLap("300미터")); add(Lines.finish("3분 7초")); add(Lines.sector(1));
 
 // 2) 고정 문구 조각 + 가변 조각(거리, 턴 번호, 섹터, 시간)

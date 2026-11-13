@@ -52,6 +52,15 @@ console.log(`문장 ${texts.size}개 → 클립 ${list.length}개 (글자 수 ${
 if (args.has("--dry")) { console.log(list.filter(t => !VAR.test(t)).join("\n")); process.exit(0); }
 
 fs.mkdirSync(OUT, { recursive: true });
+// 앞뒤 무음을 잘라 조각끼리 자연스럽게 이어지게 (ffmpeg 필요)
+function trim(file) {
+  const tmp = file + ".tmp.mp3", sr = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03";
+  try {
+    execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", file, "-af", `${sr},areverse,${sr},areverse`, "-b:a", "48k", tmp]);
+    fs.renameSync(tmp, file);
+  } catch (e) { try { fs.unlinkSync(tmp); } catch (_) {} }
+}
+if (args.has("--trim-only")) { for (const f of fs.readdirSync(OUT)) if (f.endsWith(".mp3")) trim(path.join(OUT, f)); console.log("무음 정리 완료"); process.exit(0); }
 async function synth(text, file) {
   const out = path.join(OUT, file);
   if (fs.existsSync(out) && !args.has("--force")) return;
@@ -59,14 +68,14 @@ async function synth(text, file) {
     execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-f", "lavfi", "-i", `sine=frequency=440:duration=${(0.15 + text.length * 0.07).toFixed(2)}`, "-b:a", "32k", out]);
     return;
   }
+  // 키는 환경 변수로 주거나, 없으면 네트워크 프록시가 X-Goog-Api-Key 헤더를 붙여준다고 가정
   const key = process.env.GOOGLE_TTS_API_KEY;
-  if (!key) throw new Error("GOOGLE_TTS_API_KEY 환경 변수가 없어요");
   const body = { input: { text }, voice: { languageCode: "ko-KR", name: VOICE }, audioConfig: { audioEncoding: "MP3", speakingRate: RATE, sampleRateHertz: 24000 } };
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const r = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    if (r.ok) { fs.writeFileSync(out, Buffer.from((await r.json()).audioContent, "base64")); return; }
+  for (let attempt = 0; attempt < 7; attempt++) {
+    const r = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize" + (key ? `?key=${key}` : ""), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) { fs.writeFileSync(out, Buffer.from((await r.json()).audioContent, "base64")); trim(out); return; }
     const msg = await r.text();
-    if (r.status === 429 || r.status >= 500) { await new Promise(s => setTimeout(s, 1000 * 2 ** attempt)); continue; }
+    if (r.status === 429 || r.status >= 500) { await new Promise(s => setTimeout(s, 1000 * 2 ** attempt * 2)); continue; }
     throw new Error(`${r.status} ${text}: ${msg.slice(0, 300)}`);
   }
   throw new Error("재시도 초과: " + text);
@@ -76,7 +85,7 @@ async function synth(text, file) {
   const manifest = { voice: args.has("--fake") ? "fake" : VOICE, rate: RATE, clips: {} };
   let i = 0, done = 0;
   const worker = async () => { while (i < list.length) { const t = list[i++], f = fileOf(t); await synth(t, f); manifest.clips[t] = f; if (++done % 50 === 0) console.log(`${done}/${list.length}`); } };
-  await Promise.all(Array.from({ length: 6 }, worker));
+  await Promise.all(Array.from({ length: +(process.env.CONC || 3) }, worker));
   // 더 이상 쓰지 않는 파일 정리
   const keep = new Set(Object.values(manifest.clips));
   for (const f of fs.readdirSync(OUT)) if (f.endsWith(".mp3") && !keep.has(f)) fs.unlinkSync(path.join(OUT, f));

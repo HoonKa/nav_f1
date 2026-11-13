@@ -3,7 +3,6 @@
   "appName": "PitWall",
   "webDir": "www",
   "server": {
-    "url": "https://hoonka.github.io/nav_f1/",
     "androidScheme": "https"
   },
   "android": {

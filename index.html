@@ -208,6 +208,14 @@ const Engine = {
     const rs=C.createBufferSource();rs.buffer=buf;rs.loop=true;rs.playbackRate.value=.7;
     const rbp=C.createBiquadFilter();rbp.type="bandpass";rbp.frequency.value=1700;rbp.Q.value=.7;
     this.bed=C.createGain();this.bed.gain.value=0;rs.connect(rbp);rbp.connect(this.bed);this.bed.connect(C.destination);rs.start();
+    // AI 음성용 무전기 필터: 좁은 대역 + 중역 강조 + 살짝 찌그러짐 + 압축
+    this.vin=C.createGain(); let node=this.vin;
+    const chain=[["highpass",380,.7],["peaking",1900,1,7],["lowpass",3300,.9]];
+    for(const [type,f,q,g] of chain){ const b=C.createBiquadFilter(); b.type=type; b.frequency.value=f; b.Q.value=q; if(g) b.gain.value=g; node.connect(b); node=b; }
+    const vs=C.createWaveShaper(), vc=new Float32Array(1024); for(let i=0;i<1024;i++){const x=i/512-1; vc[i]=Math.tanh(3*x)/Math.tanh(3);} vs.curve=vc;
+    const comp=C.createDynamicsCompressor(); comp.threshold.value=-28; comp.ratio.value=8; comp.attack.value=.003; comp.release.value=.15;
+    const vout=C.createGain(); vout.gain.value=1.1;
+    node.connect(vs); vs.connect(comp); comp.connect(vout); vout.connect(C.destination);
   },
   resume(){ this.init(); if(this.ctx.state!=="running") this.ctx.resume(); },
   setRunning(run){ if(!this.ctx) return; const t=this.ctx.currentTime; this.master.gain.setTargetAtTime(run&&this.on?.22:0,t,.3); },
@@ -247,7 +255,31 @@ const Engine = {
   }
 };
 
-/* ================= 팀 라디오 (TTS) ================= */
+/* ================= AI 음성 팩 (voice/manifest.json) ================= */
+// 문장을 [고정 문구 | 거리 | 턴 번호 | 시간] 조각으로 나눠, 미리 만든 AI 음성 클립을 이어 붙여 재생
+const SEG_RE=/(턴 \d+|섹터 \d+|\d+(?:\.\d+)?킬로미터|\d+미터|\d+분|\d+초)/;
+function segment(text){
+  return text.split(SEG_RE).map(x=>x.replace(/^[\s.,!?]+/,"").trim()).filter(x=>x && /[가-힣A-Za-z0-9]/.test(x));
+}
+const VoicePack={
+  map:null, base:"voice/", buf:{},
+  async load(){ try{ const r=await fetch(this.base+"manifest.json",{cache:"no-cache"}); if(r.ok) this.map=(await r.json()).clips; }catch(e){} },
+  has(segs){ return !!this.map && segs.every(s=>this.map[s]); },
+  get(seg){
+    if(!this.buf[seg]) this.buf[seg]=fetch(this.base+this.map[seg]).then(r=>r.arrayBuffer())
+      .then(a=>new Promise((res,rej)=>Engine.ctx.decodeAudioData(a,res,rej))).catch(e=>{delete this.buf[seg];throw e;});
+    return this.buf[seg];
+  },
+  prefetch(){ if(!this.map||!Engine.ctx) return; Object.keys(this.map).filter(k=>!/\d+[분초]$/.test(k)).forEach((k,i)=>setTimeout(()=>this.get(k).catch(()=>{}),i*15)); },
+  async play(segs){
+    const bufs=await Promise.all(segs.map(s=>this.get(s)));
+    const C=Engine.ctx; let t=C.currentTime+.05, last=null;
+    for(const b of bufs){ const s=C.createBufferSource(); s.buffer=b; s.connect(Engine.vin); s.start(t); t+=b.duration+.04; last=s; }
+    return new Promise(res=>{ last.onended=res; setTimeout(res,(t-C.currentTime)*1000+800); });
+  }
+};
+
+/* ================= 팀 라디오 ================= */
 const Radio = {
   q:[], busy:false, voice:null,
   init(){
@@ -269,11 +301,21 @@ const Radio = {
     this.busy=true;
     $("msg").textContent=text; $("radio").classList.add("on");
     Engine.setDuck(true); Engine.chirp("in");
+    const segs=segment(text);
+    if(Engine.ctx && VoicePack.has(segs)){
+      let done=false; const fin=()=>{ if(done) return; done=true; Engine.chirp("out"); $("radio").classList.remove("on"); Engine.setDuck(false);
+        setTimeout(()=>{this.busy=false;this.next();},300); };
+      setTimeout(()=>VoicePack.play(segs).then(fin,()=>{ this.tts(text,fin); }),220);
+      return;
+    }
+    this.tts(text);
+  },
+  tts(text,finCb){
     setTimeout(()=>{
       const u=new SpeechSynthesisUtterance(text.replace(/[—…]/g,", "));
       u.lang="ko-KR"; if(this.voice) u.voice=this.voice; u.rate=1.12; u.pitch=.95;
-      let done=false; const fin=()=>{ if(done) return; done=true; Engine.chirp("out"); $("radio").classList.remove("on"); Engine.setDuck(false);
-        setTimeout(()=>{this.busy=false;this.next();},350); };
+      let done=false; const fin=finCb||(()=>{ if(done) return; done=true; Engine.chirp("out"); $("radio").classList.remove("on"); Engine.setDuck(false);
+        setTimeout(()=>{this.busy=false;this.next();},350); });
       u.onend=fin; u.onerror=fin; setTimeout(fin, 2500+text.length*160); // 안전장치
       speechSynthesis.speak(u);
     },260);
@@ -311,7 +353,7 @@ function callout(m,stage,d,n){
       near:[`갈림길 ${d}. ${side} 라인 유지.`],
       now:[`${side} 라인! 지금!`]},
     "roundabout":{
-      far:[`${d} 앞 시케인. 회전교차로에서 ${ex} 출구야.`,`턴 ${n}은 시케인이야. 회전교차로 ${ex} 출구, ${d} 앞.`],
+      far:[`${d} 앞 시케인. 회전교차로에서 ${ex} 출구야.`,`턴 ${n}, 시케인이야. 회전교차로 ${ex} 출구, ${d} 앞.`],
       near:[`시케인 접근. ${ex} 출구 잊지 마.`],
       now:[`시케인 진입! ${ex} 출구로 빠져.`]},
     "end of road":{
@@ -319,7 +361,7 @@ function callout(m,stage,d,n){
       near:[`브레이킹 포인트. 도로 끝에서 ${corner}.`],
       now:[`턴 인! ${plain}!`]},
     "default":{
-      far:[`턴 ${n} 접근 중. ${d} 앞 ${corner}.`,`다음은 턴 ${n}, ${corner}. ${d} 남았어.`,`${d} 앞 ${corner}${m.name?`, ${m.name} 방향`:""}. 라인 미리 잡아둬.`],
+      far:[`턴 ${n} 접근 중. ${d} 앞 ${corner}.`,`다음은 턴 ${n}, ${corner}. ${d} 남았어.`,`${d} 앞 ${corner}. 라인 미리 잡아둬.`],
       near:[`브레이킹 포인트. ${d} 앞 ${corner}.`,`곧 ${corner}. ${d}.`],
       now:[`턴 인! ${plain}!`,`지금 ${plain}! 좋아, 좋아.`,`에이펙스 노려. ${plain}!`]}
   };
@@ -472,7 +514,7 @@ function announce(){
 }
 function finish(){
   if(S.done) return; S.done=true;
-  const t=fmtTime(S.elapsed).replace(":","분 ")+"초";
+  const sec=Math.floor(S.elapsed), t=(sec>=60?Math.floor(sec/60)+"분"+(sec%60?" ":""):"")+(sec%60||sec<60?(sec%60)+"초":"");
   Radio.say(Lines.finish(t),true,3);
   $("doneSub").textContent=`${S.dest?.name||"목적지"} 도착 · 기록 ${t}`;
   stopRun(); view("done");
@@ -483,7 +525,7 @@ async function boot(){
   Engine.resume(); Engine.setRunning(true);
   try{ if("wakeLock" in navigator) S.wake=await navigator.wakeLock.request("screen"); }catch(e){}
   follow=true; view("drive"); map.setView(posAt(S.route,0),17);
-  car.addTo(map);
+  car.addTo(map); VoicePack.prefetch();
   Radio.say(pick(Lines.start),true,3);
 }
 function startSim(){
@@ -616,7 +658,7 @@ async function choose(dest){
 }
 
 /* ================= 이벤트 ================= */
-Radio.init();
+Radio.init(); VoicePack.load();
 $("q").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); doSearch(); } });
 $("q").addEventListener("search",doSearch);
 $("btnCancel").onclick=endNav;

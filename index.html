@@ -9,7 +9,7 @@
 <title>Pit Wall Nav</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <style>
@@ -153,6 +153,7 @@ button.b.stop{background:#3a1416;color:#ff8a80}
     소리를 켜고, 주행 중에는 화면을 켜둔 채 거치대에 두세요.
     <div class="geo" id="geoBox"><span id="geoState">📍 내 위치 찾는 중…</span><button class="b" id="btnLocate" style="flex:none;padding:8px 12px">내 위치 찾기</button></div>
     <div class="geohelp hidden" id="geoHelp"></div>
+    <button class="b primary hidden" id="btnInstall" style="width:100%;margin-top:10px">📲 앱으로 설치하기</button>
   </div>
   <!-- 경로 미리보기 -->
   <div id="previewSheet" class="card preview hidden">
@@ -816,6 +817,12 @@ function startGeo(){
     geoHelp(e.code===1||e.code===2);
   },{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }
+// 앱 설치 (안드로이드 크롬)
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+let installEvt=null;
+window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; $("btnInstall").classList.remove("hidden"); });
+window.addEventListener("appinstalled",()=>{ $("btnInstall").classList.add("hidden"); });
+$("btnInstall").onclick=async()=>{ if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt=null; $("btnInstall").classList.add("hidden"); };
 $("btnLocate").onclick=()=>{ startGeo(); if(S.here) map.setView(S.here,16); };
 startGeo();
 view("idle");

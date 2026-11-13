@@ -1,6 +1,6 @@
 {
   "name": "Pit Wall Nav",
-  "short_name": "PitWall",
+  "short_name": "PitWall 웹",
   "description": "F1 팀 라디오처럼 안내하는 내비게이션",
   "id": "./",
   "start_url": "./",

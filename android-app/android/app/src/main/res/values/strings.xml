@@ -6,4 +6,6 @@
     <string name="custom_url_scheme">io.github.hoonka.pitwall</string>
     <string name="capacitor_background_geolocation_notification_channel_name">레이스 안내</string>
     <string name="capacitor_background_geolocation_notification_color">#E10600</string>
+    <string name="tmap_reader_label">PitWall 티맵 읽기 (시험)</string>
+    <string name="tmap_reader_desc">티맵 화면에 보이는 안내 글자만 읽어서 PitWall 무전 안내로 바꿔요. 다른 앱 화면은 읽지 않아요.</string>
 </resources>

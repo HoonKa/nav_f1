@@ -131,6 +131,11 @@ button.b.stop{background:#3a1416;color:#ff8a80}
       <div class="lbl">티맵 API 키 <span id="keyState"></span></div>
       <div class="row2"><input id="tmapKey" type="password" placeholder="SK 오픈API에서 받은 앱 키" autocomplete="off"><button class="b primary" id="btnSaveKey" style="flex:none">저장</button></div>
       <div class="hint">키는 이 폰에만 저장돼요. 키가 없으면 무료 오픈스트리트맵 길찾기를 써요(교통정보 없음).</div>
+      <div id="trBox" class="hidden" style="margin-top:14px;border-top:1px solid #333;padding-top:10px">
+        <div class="lbl">티맵 읽기 시험 <span id="trState"></span></div>
+        <div class="row2" style="flex-wrap:wrap"><button class="b" id="trInfo">① 제한된 설정 허용</button><button class="b" id="trAcc">② 접근성에서 켜기</button><button class="b" id="trCopy">복사</button></div>
+        <pre id="trLog" style="max-height:220px;overflow:auto;font-size:11px;white-space:pre-wrap;background:#0008;border-radius:8px;padding:8px;margin:8px 0 0">아직 읽은 내용이 없어요. 티맵에서 길안내를 시작해 보세요.</pre>
+      </div>
     </div>
     <div class="results hidden" id="results"></div>
   </div>
@@ -852,7 +857,20 @@ async function choose(dest){
 /* ================= 이벤트 ================= */
 Radio.init(); VoicePack.load();
 function showKeyState(){ $("keyState").textContent=Keys.tmap?"✅ 연결됨":"(없음)"; $("tmapKey").value=Keys.tmap; }
-$("btnSettings").onclick=()=>{ $("settings").classList.toggle("hidden"); $("results").classList.add("hidden"); showKeyState(); };
+$("btnSettings").onclick=()=>{ $("settings").classList.toggle("hidden"); $("results").classList.add("hidden"); showKeyState(); trStatus(); };
+/* ---------- 티맵 화면 읽기 (시험, 안드로이드 앱 전용) ---------- */
+const TR=NATIVE?window.Capacitor.registerPlugin("TmapReader"):null, trItems=[];
+function trRender(){ if(trItems.length) $("trLog").textContent=trItems.slice(-15).map((t,i)=>"── "+(i+1)+" ──\n"+t).join("\n"); }
+async function trStatus(){ if(!TR) return; try{ const st=await TR.status(); $("trState").textContent=st.enabled?"✅ 켜짐":"(꺼짐)"; }catch(e){ $("trState").textContent="(이 앱 버전엔 없음 · 새 APK 필요)"; } }
+if(TR){
+  $("trBox").classList.remove("hidden");
+  try{ TR.addListener("snapshot",o=>{ trItems.push(o.text); if(trItems.length>40) trItems.shift(); trRender(); }); }catch(e){}
+  TR.getLog().then(o=>{ trItems.push(...(o.items||[])); trRender(); }).catch(()=>{});
+  $("trInfo").onclick=()=>TR.openAppInfo().catch(()=>{});
+  $("trAcc").onclick=()=>TR.openSettings().catch(()=>{});
+  $("trCopy").onclick=async()=>{ const t=$("trLog").textContent; try{ await navigator.clipboard.writeText(t); $("trCopy").textContent="복사됨"; }catch(e){ const r=document.createRange(); r.selectNodeContents($("trLog")); getSelection().removeAllRanges(); getSelection().addRange(r); document.execCommand("copy"); $("trCopy").textContent="복사됨"; } setTimeout(()=>$("trCopy").textContent="복사",1500); };
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) trStatus(); });
+}
 $("btnSaveKey").onclick=()=>{ Keys.tmap=$("tmapKey").value.trim(); showKeyState(); $("settings").classList.add("hidden"); };
 showKeyState();
 $("q").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); doSearch(); } });

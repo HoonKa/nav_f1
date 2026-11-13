@@ -29,7 +29,10 @@ const { callout, Lines, segment, sayDist } = ctx;
 const texts = new Set();
 const add = x => (Array.isArray(x) ? x : [x]).forEach(t => texts.add(t));
 const MODS = ["left", "right", "slight left", "slight right", "sharp left", "sharp right", "uturn", "straight", ""];
-const TYPES = ["on ramp", "off ramp", "merge", "fork", "roundabout", "end of road", "turn"];
+const TYPES = ["on ramp", "off ramp", "merge", "fork", "roundabout", "end of road", "turn",
+  "tunnel", "underpass", "overpass", "beside underpass", "beside overpass", "sharp curve", "accident zone"];
+for (let clock = 1; clock <= 12; clock++) for (const stage of ["far", "near", "now"])
+  add(callout({ type: "roundabout", modifier: "right", clock, name: "" }, stage, "500미터", 1));
 for (const type of TYPES) for (const modifier of MODS) for (const exit of [1, 2, 3, 4, 5]) for (const stage of ["far", "near", "now"])
   add(callout({ type, modifier, exit, name: "" }, stage, "500미터", 1));
 for (const k of ["start", "after", "chatter", "yellow", "green", "offroute", "rerouted"]) add(Lines[k]);

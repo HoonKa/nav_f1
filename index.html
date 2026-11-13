@@ -40,6 +40,14 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .search .logo b{color:var(--accent)}
 input,select{font:inherit;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
 .search input{flex:1;font-size:16px}
+.gear-btn{flex:none;background:var(--panel2);border:1px solid var(--line);border-radius:12px;width:46px;font-size:18px;cursor:pointer}
+.settings{padding:4px 10px 12px}
+.settings .lbl{font-size:13px;font-weight:700;margin-bottom:6px}
+.settings .lbl span{font-weight:500;color:var(--muted);margin-left:6px}
+.settings .row2{display:flex;gap:8px}.settings .row2 input{flex:1}
+.settings .hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+.prov{display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:2px 6px;margin-left:6px;vertical-align:middle;background:var(--panel2);color:var(--muted)}
+.prov.tmap{background:#1e3a8a;color:#cfe0ff}
 .results{max-height:50vh;overflow:auto;padding:4px}
 .results button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);padding:12px;border-bottom:1px solid var(--line);font:inherit;cursor:pointer}
 .results button:last-child{border:0}
@@ -110,6 +118,12 @@ button.b.stop{background:#3a1416;color:#ff8a80}
     <div class="search">
       <div class="logo">PIT WALL<br><b>NAV</b></div>
       <input id="q" type="search" placeholder="어디로 갈까요?" enterkeyhint="search" autocomplete="off">
+      <button class="gear-btn" id="btnSettings" title="설정">⚙️</button>
+    </div>
+    <div class="settings hidden" id="settings">
+      <div class="lbl">티맵 API 키 <span id="keyState"></span></div>
+      <div class="row2"><input id="tmapKey" type="password" placeholder="SK 오픈API에서 받은 앱 키" autocomplete="off"><button class="b primary" id="btnSaveKey" style="flex:none">저장</button></div>
+      <div class="hint">키는 이 폰에만 저장돼요. 키가 없으면 무료 오픈스트리트맵 길찾기를 써요(교통정보 없음).</div>
     </div>
     <div class="results hidden" id="results"></div>
   </div>
@@ -353,10 +367,20 @@ function callout(m,stage,d,n){
       far:[`${d} 앞 갈림길. 레이싱 라인은 ${side}이야.`,`턴 ${n}, 갈림길에서 ${side}으로 간다. ${d} 남았어.`],
       near:[`갈림길 ${d}. ${side} 라인 유지.`],
       now:[`${side} 라인! 지금!`]},
-    "roundabout":{
+    "roundabout":m.clock?{
+      far:[`${d} 앞 시케인. 회전교차로에서 ${m.clock}시 방향이야.`],
+      near:[`시케인 접근. ${m.clock}시 방향 잊지 마.`],
+      now:[`시케인 진입! ${m.clock}시 방향으로 빠져.`]}:{
       far:[`${d} 앞 시케인. 회전교차로에서 ${ex} 출구야.`,`턴 ${n}, 시케인이야. 회전교차로 ${ex} 출구, ${d} 앞.`],
       near:[`시케인 접근. ${ex} 출구 잊지 마.`],
       now:[`시케인 진입! ${ex} 출구로 빠져.`]},
+    "tunnel":{far:[`${d} 앞 터널이야.`],near:[`곧 터널. 라이트 체크.`],now:[`터널 진입. 시야 확보해.`]},
+    "underpass":{far:[`${d} 앞 지하차도로 들어가.`],near:[`지하차도 진입 준비. 라인 유지.`],now:[`지하차도 진입!`]},
+    "overpass":{far:[`${d} 앞 고가도로로 올라가.`],near:[`고가도로 진입 준비.`],now:[`고가 진입! 위로 올라가.`]},
+    "beside underpass":{far:[`${d} 앞 지하차도 말고 옆길로 가.`],near:[`지하차도 들어가지 마. 옆길 유지.`],now:[`옆길 유지!`]},
+    "beside overpass":{far:[`${d} 앞 고가도로 말고 옆길로 가.`],near:[`고가 올라가지 마. 옆길 유지.`],now:[`옆길 유지!`]},
+    "sharp curve":{far:[`${d} 앞 급커브. 브레이킹 준비.`],near:[`급커브 접근. 속도 낮춰.`],now:[`급커브! 부드럽게.`]},
+    "accident zone":{far:[`${d} 앞 사고 다발 구간. 옐로 플래그 구간이야.`],near:[`옐로 플래그 구간. 조심해.`],now:[`옐로 플래그. 집중해.`]},
     "end of road":{
       far:[`${d} 앞 도로 끝에서 ${corner}.`],
       near:[`브레이킹 포인트. 도로 끝에서 ${corner}.`],
@@ -373,6 +397,9 @@ function turnLabel(m){
   if(m.type==="arrive") return "목적지";
   if(m.type==="roundabout"||m.type==="rotary") return "회전교차로"+(m.exit?` ${m.exit}번째 출구`:"");
   if(m.type==="merge") return "본선 합류";
+  if(m.clock) return `회전교차로 ${m.clock}시 방향`;
+  const X={"tunnel":"터널 진입","underpass":"지하차도 진입","overpass":"고가도로 진입","beside underpass":"지하차도 옆길","beside overpass":"고가도로 옆길","sharp curve":"급커브 주의","accident zone":"사고 다발 구간"};
+  if(X[m.type]) return X[m.type];
   if(m.type==="on ramp") return (SIDE(m))+" 진입로로 진입";
   if(m.type==="off ramp") return (SIDE(m))+" 출구로 나가기";
   if(m.type==="fork") return (m.modifier||"").includes("left")?"갈림길에서 왼쪽":"갈림길에서 오른쪽";
@@ -424,7 +451,7 @@ async function osrmRoute(from,to){
   const j=await (await fetch(url)).json();
   if(!j.routes||!j.routes.length) throw new Error("경로 없음");
   const rt=j.routes[0], r=prepCoords(rt.geometry.coordinates.map(c=>[c[1],c[0]]));
-  r.duration=rt.duration; r.maneuvers=[]; r.startName=(rt.legs[0].steps[0]||{}).name||"";
+  r.duration=rt.duration; r.provider="osm"; r.maneuvers=[]; r.startName=(rt.legs[0].steps[0]||{}).name||"";
   let acc=0;
   for(const st of rt.legs[0].steps){
     const mv=st.maneuver, loc=[mv.location[1],mv.location[0]];
@@ -438,6 +465,85 @@ async function osrmRoute(from,to){
     r.maneuvers.push({type:"arrive",modifier:"",along:r.total,name:"",loc:r.coords[r.coords.length-1]});
   return r;
 }
+/* ---------- 티맵 (SK 오픈API) ---------- */
+const Keys={ get tmap(){ try{return localStorage.getItem("pw_tmap_key")||"";}catch(e){return "";} },
+  set tmap(v){ try{ v?localStorage.setItem("pw_tmap_key",v):localStorage.removeItem("pw_tmap_key"); }catch(e){} } };
+// 티맵 turnType -> 앱 안내 종류
+function tmapManeuver(tt){
+  const T={11:null,51:null,233:null,
+    12:["turn","left"],13:["turn","right"],14:["turn","uturn"],15:["turn","uturn"],
+    16:["turn","sharp left"],17:["turn","slight left"],18:["turn","slight right"],19:["turn","sharp right"],
+    43:["turn","slight right"],117:["turn","slight right"],44:["turn","slight left"],118:["turn","slight left"],
+    73:["fork","right"],74:["fork","right"],75:["fork","left"],76:["fork","left"],
+    101:["on ramp","right"],111:["on ramp","right"],102:["on ramp","left"],112:["on ramp","left"],103:["on ramp","straight"],113:["on ramp","straight"],
+    104:["off ramp","right"],114:["off ramp","right"],105:["off ramp","left"],115:["off ramp","left"],106:["off ramp","straight"],116:["off ramp","straight"],
+    119:["underpass",""],120:["overpass",""],121:["tunnel",""],123:["beside underpass",""],124:["beside overpass",""],
+    192:["accident zone",""],193:["sharp curve",""],
+    182:["arrive",""],183:["arrive",""],201:["arrive",""],203:["arrive",""]};
+  if(tt===71||tt===72) return {type:"roundabout",modifier:"right",exit:tt-70};
+  if(tt>=131&&tt<=142){ const c=tt-130; return {type:"roundabout",modifier:c<6?"right":c>6?"left":"straight",clock:c}; }
+  const v=T[tt]; return v?{type:v[0],modifier:v[1]}:null;
+}
+async function tmapRoute(from,to,dest){
+  const body=new URLSearchParams({startX:from[1],startY:from[0],endX:to[1],endY:to[0],reqCoordType:"WGS84GEO",resCoordType:"WGS84GEO",
+    searchOption:"0",trafficInfo:"Y",carType:"1",startName:"출발지",endName:(dest&&dest.name)||"목적지"});
+  if(dest&&dest.poiId){ body.set("endPoiId",dest.poiId); if(dest.rpFlag) body.set("endRpFlag",dest.rpFlag); }
+  if(S.v>2){ body.set("speed",Math.round(S.v*3.6)); if(S.hd!=null) body.set("angle",Math.round(S.hd)); }
+  const res=await fetch("https://apis.openapi.sk.com/tmap/routes?version=1",{method:"POST",
+    headers:{appKey:Keys.tmap,"Content-Type":"application/x-www-form-urlencoded",Accept:"application/json"},body});
+  if(!res.ok) throw new Error("tmap "+res.status);
+  const j=await res.json(), feats=j.features||[];
+  const coords=[], pts=[], hwSpans=[], traffic=[];
+  let duration=0, total=0;
+  for(const f of feats){
+    const g=f.geometry, p=f.properties||{};
+    if(g.type==="LineString"){
+      const start=coords.length?coords.length-1:0;
+      g.coordinates.forEach((c,i)=>{ if(i===0&&coords.length) return; coords.push([c[1],c[0]]); });
+      if(p.roadType===0||p.roadType===1) hwSpans.push([start,coords.length-1]);
+      (g.traffic||[]).forEach(t=>traffic.push([start+t[0],start+t[1],t[2]]));
+    } else if(g.type==="Point"){
+      if(p.pointType==="S"){ duration=p.totalTime||0; total=p.totalDistance||0; }
+      if(!coords.length) coords.push([g.coordinates[1],g.coordinates[0]]);
+      pts.push({idx:coords.length-1,p});
+    }
+  }
+  const r=prepCoords(coords); r.duration=duration||r.total/11; r.provider="tmap"; r.traffic=traffic;
+  r.hwSpans=hwSpans.map(([a,b])=>[r.cum[a],r.cum[b]]);
+  r.maneuvers=[];
+  for(const {idx,p} of pts){
+    const m=tmapManeuver(p.turnType); if(!m) continue;
+    r.maneuvers.push(Object.assign(m,{along:m.type==="arrive"?r.total:r.cum[idx],name:p.nextRoadName||"",loc:coords[idx]}));
+  }
+  if(!r.maneuvers.length||r.maneuvers[r.maneuvers.length-1].type!=="arrive")
+    r.maneuvers.push({type:"arrive",modifier:"",along:r.total,name:"",loc:coords[coords.length-1]});
+  return r;
+}
+async function tmapSearch(q,near){
+  const u=new URLSearchParams({version:"1",searchKeyword:q,count:"15",reqCoordType:"WGS84GEO",resCoordType:"WGS84GEO",searchtypCd:"A",appKey:Keys.tmap});
+  if(near){ u.set("centerLat",near[0]); u.set("centerLon",near[1]); }
+  const res=await fetch("https://apis.openapi.sk.com/tmap/pois?"+u,{headers:{Accept:"application/json"}});
+  if(res.status===204) return [];
+  if(!res.ok) throw new Error("tmap "+res.status);
+  const j=await res.json(); const list=(((j.searchPoiInfo||{}).pois||{}).poi)||[];
+  return list.map(x=>{
+    const lat=+(x.frontLat||x.noorLat), lon=+(x.frontLon||x.noorLon);
+    const road=(x.newAddressList&&x.newAddressList.newAddress&&x.newAddressList.newAddress[0]&&x.newAddressList.newAddress[0].fullAddressRoad)||"";
+    const addr=road||[x.upperAddrName,x.middleAddrName,x.lowerAddrName,x.detailAddrName].filter(Boolean).join(" ");
+    return {name:x.name,addr,ll:[lat,lon],poiId:x.id,rpFlag:x.rpFlag};
+  });
+}
+// 공통 진입점: 키가 있으면 티맵, 없으면 무료 오픈스트리트맵
+async function findRoute(from,dest){ return Keys.tmap ? tmapRoute(from,dest.ll,dest) : osrmRoute(from,dest.ll); }
+async function searchPlaces(q,near){
+  if(Keys.tmap) return tmapSearch(q,near);
+  return (await geocode(q,near)).map(x=>{
+    const parts=x.display_name.split(",").map(s=>s.trim());
+    return {name:x.name||parts[0],addr:parts.slice(1).reverse().filter(p=>!/^\d{5}$/.test(p)&&p!=="대한민국").join(" "),ll:[+x.lat,+x.lon]};
+  });
+}
+const inHw=(r,s)=>r.hwSpans?r.hwSpans.some(([a,b])=>s>=a-30&&s<=b):null;
+
 async function geocode(q,near){
   let url=`https://nominatim.openstreetmap.org/search?format=json&limit=8&countrycodes=kr&accept-language=ko&q=${encodeURIComponent(q)}`;
   if(near) url+=`&viewbox=${near[1]-.6},${near[0]+.5},${near[1]+.6},${near[0]-.5}`;
@@ -461,7 +567,10 @@ $("recenter").onclick=()=>{ follow=true; $("recenter").classList.add("hidden"); 
 function drawRoute(r){
   [routeCase,routeLine,doneLine].forEach(l=>l&&map.removeLayer(l));
   routeCase=L.polyline(r.coords,{color:"#fff",weight:11,opacity:.9}).addTo(map);
-  routeLine=L.polyline(r.coords,{color:"#e10600",weight:7}).addTo(map);
+  routeLine=L.featureGroup([L.polyline(r.coords,{color:"#e10600",weight:7})]).addTo(map);
+  // 실시간 교통 (티맵): 원활 초록 / 서행 노랑 / 지체 주황 / 정체 빨강(진하게)
+  const TC={1:"#22d36b",2:"#ffd400",3:"#ff8c00",4:"#8b0000"};
+  (r.traffic||[]).forEach(([a,b,c])=>{ if(TC[c]&&b>a) routeLine.addLayer(L.polyline(r.coords.slice(a,b+1),{color:TC[c],weight:7})); });
   doneLine=L.polyline([],{color:"#555b6b",weight:7}).addTo(map);
   destPin.setLatLng(r.coords[r.coords.length-1]).addTo(map);
 }
@@ -484,12 +593,12 @@ function announce(){
   const r=S.route; if(!r||S.done) return;
   while(S.mi<r.maneuvers.length-1 && r.maneuvers[S.mi].along < S.s-5){
     const pm=r.maneuvers[S.mi];
-    if(pm.type==="on ramp") S.hw=true;
-    if(pm.type==="off ramp") S.hw=/고속|도시고속|고속화/.test(pm.name);
+    if(!r.hwSpans){ if(pm.type==="on ramp") S.hw=true; if(pm.type==="off ramp") S.hw=/고속|도시고속|고속화/.test(pm.name); }
     if(Lines.afterType[pm.type]) Radio.say(pick(Lines.afterType[pm.type]));
     else if(Math.random()<.3) Radio.say(pick(Lines.after));
     S.mi++;
   }
+  if(r.hwSpans) S.hw=inHw(r,S.s);
   const m=r.maneuvers[S.mi], d=m.along-S.s, n=S.mi+1, key=S.mi, f=S.flags[key]||(S.flags[key]={});
   const prevAlong=S.mi>0?r.maneuvers[S.mi-1].along:0, gap=m.along-prevAlong;
   const v=Math.max(S.v,5), farTh=S.hw?1000:550, nearTh=Math.max(120,v*9), nowTh=Math.max(30,v*2.5);
@@ -564,7 +673,7 @@ async function onFix(pos){
   if(pr.d>45 && pos.coords.accuracy<40) S.offCount++; else { S.offCount=0; S.s=Math.max(S.s,pr.along); }
   if(S.offCount>=3 && !S.rerouting){
     S.rerouting=true; Radio.say(pick(Lines.offroute),true,3);
-    try{ const r=await osrmRoute(p,S.dest.ll); const el=S.elapsed; resetRace(r); S.elapsed=el; drawRoute(r); Radio.say(pick(Lines.rerouted),false,2); }catch(e){}
+    try{ const r=await findRoute(p,S.dest); const el=S.elapsed; resetRace(r); S.elapsed=el; drawRoute(r); Radio.say(pick(Lines.rerouted),false,2); }catch(e){}
     S.rerouting=false; S.offCount=0;
   }
 }
@@ -590,7 +699,7 @@ const arrows={
   arrive:"M12 34V8 M12 8h16l-4 6 4 6H12", roundabout:"M20 34V26 M20 26a7 7 0 1 1 7-7 M27 19l-6 1 M27 19l1-6"
 };
 function iconFor(m){
-  let k=m.type==="arrive"?"arrive":/roundabout|rotary/.test(m.type)?"roundabout":(m.modifier||"straight");
+  let k=m.type==="arrive"?"arrive":/roundabout|rotary/.test(m.type)?"roundabout":/tunnel|pass|curve|accident/.test(m.type)?"straight":(m.modifier||"straight");
   return arrows[k.replace("sharp ","")]||arrows.straight;
 }
 function tick(pos){
@@ -627,19 +736,17 @@ async function doSearch(){
   const q=$("q").value.trim(); if(!q) return;
   const box=$("results"), seq=++searchSeq; box.classList.remove("hidden"); box.innerHTML="<p>검색 중…</p>";
   try{
-    const res=await geocode(q,S.here); if(seq!==searchSeq) return;
+    const res=await searchPlaces(q,S.here); if(seq!==searchSeq) return;
     box.innerHTML="";
     if(!res.length){ box.innerHTML="<p>결과가 없어요. 장소 이름이나 주소로 다시 찾아보세요.</p>"; return; }
     res.forEach(x=>{
-      const parts=x.display_name.split(",").map(s=>s.trim()), name=x.name||parts[0];
-      const addr=parts.slice(1).reverse().filter(p=>!/^\d{5}$/.test(p)&&p!=="대한민국").join(" ");
-      const dist=S.here?` · ${fmtDist(hav(S.here,[+x.lat,+x.lon]))}`:"";
+      const dist=S.here?` · ${fmtDist(hav(S.here,x.ll))}`:"";
       const b=document.createElement("button");
-      b.innerHTML=`<b></b><small></small>`; b.querySelector("b").textContent=name; b.querySelector("small").textContent=addr+dist;
-      b.onclick=()=>choose({name,addr,ll:[+x.lat,+x.lon]});
+      b.innerHTML=`<b></b><small></small>`; b.querySelector("b").textContent=x.name; b.querySelector("small").textContent=x.addr+dist;
+      b.onclick=()=>choose(x);
       box.appendChild(b);
     });
-  }catch(e){ box.innerHTML="<p>검색 서버에 연결하지 못했어요.</p>"; }
+  }catch(e){ box.innerHTML=Keys.tmap&&/tmap (401|403)/.test(e.message)?"<p>티맵 키가 맞지 않아요. ⚙️ 설정에서 키를 확인해 주세요.</p>":"<p>검색 서버에 연결하지 못했어요.</p>"; }
 }
 async function choose(dest){
   Engine.resume(); // 첫 터치에서 오디오 잠금 해제 (iOS)
@@ -650,17 +757,21 @@ async function choose(dest){
   $("btnGo").disabled=$("btnSim").disabled=true;
   const from=S.here||SEOUL;
   try{
-    const r=await osrmRoute(from,dest.ll); S.route=r; drawRoute(r);
+    const r=await findRoute(from,dest); S.route=r; drawRoute(r);
     map.fitBounds(L.latLngBounds(r.coords),{paddingTopLeft:[30,40],paddingBottomRight:[30,260]});
     const min=Math.round(r.duration/60);
-    $("pSum").innerHTML=`<b>${min>=60?Math.floor(min/60)+"시간 "+(min%60)+"분":min+"분"}</b> · ${fmtDist(r.total)} · 코너 ${r.maneuvers.length-1}개`
+    $("pSum").innerHTML=`<b>${min>=60?Math.floor(min/60)+"시간 "+(min%60)+"분":min+"분"}</b> · ${fmtDist(r.total)} · 코너 ${r.maneuvers.length-1}개 <span class="prov ${r.provider==="tmap"?"tmap":""}">${r.provider==="tmap"?"티맵 · 실시간 교통":"오픈스트리트맵"}</span>`
       +(S.here?"":`<br><small style="color:var(--muted)">현재 위치를 못 받아서 서울시청에서 출발하는 경로예요.</small>`);
     $("btnSim").disabled=false; $("btnGo").disabled=!S.gps;
-  }catch(e){ $("pSum").textContent="경로를 찾지 못했어요. 다른 목적지로 시도해 주세요."; }
+  }catch(e){ $("pSum").textContent=/tmap (401|403)/.test(e.message)?"티맵 키가 맞지 않아요. ⚙️ 설정에서 키를 확인해 주세요.":"경로를 찾지 못했어요. 다른 목적지로 시도해 주세요."; }
 }
 
 /* ================= 이벤트 ================= */
 Radio.init(); VoicePack.load();
+function showKeyState(){ $("keyState").textContent=Keys.tmap?"✅ 연결됨":"(없음)"; $("tmapKey").value=Keys.tmap; }
+$("btnSettings").onclick=()=>{ $("settings").classList.toggle("hidden"); $("results").classList.add("hidden"); showKeyState(); };
+$("btnSaveKey").onclick=()=>{ Keys.tmap=$("tmapKey").value.trim(); showKeyState(); $("settings").classList.add("hidden"); };
+showKeyState();
 $("q").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); doSearch(); } });
 $("q").addEventListener("search",doSearch);
 $("btnCancel").onclick=endNav;

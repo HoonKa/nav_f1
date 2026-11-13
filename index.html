@@ -129,7 +129,7 @@ button.b.stop{background:#3a1416;color:#ff8a80}
     </div>
     <div class="settings hidden" id="settings">
       <div class="lbl">티맵 API 키 <span id="keyState"></span></div>
-      <div class="row2"><input id="tmapKey" type="password" placeholder="SK 오픈API에서 받은 앱 키" autocomplete="off"><button class="b primary" id="btnSaveKey" style="flex:none">저장</button></div>
+      <div class="row2"><input id="tmapKey" type="text" placeholder="SK 오픈API에서 받은 앱 키" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="b" id="btnPasteKey" style="flex:none">붙여넣기</button><button class="b primary" id="btnSaveKey" style="flex:none">저장</button></div>
       <div class="hint">키는 이 폰에만 저장돼요. 키가 없으면 무료 오픈스트리트맵 길찾기를 써요(교통정보 없음).</div>
       <div id="trBox" class="hidden" style="margin-top:14px;border-top:1px solid #333;padding-top:10px">
         <div class="lbl">티맵 읽기 시험 <span id="trState"></span></div>
@@ -871,6 +871,7 @@ if(TR){
   $("trCopy").onclick=async()=>{ const t=$("trLog").textContent; try{ await navigator.clipboard.writeText(t); $("trCopy").textContent="복사됨"; }catch(e){ const r=document.createRange(); r.selectNodeContents($("trLog")); getSelection().removeAllRanges(); getSelection().addRange(r); document.execCommand("copy"); $("trCopy").textContent="복사됨"; } setTimeout(()=>$("trCopy").textContent="복사",1500); };
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden) trStatus(); });
 }
+$("btnPasteKey").onclick=async()=>{ try{ const t=(await navigator.clipboard.readText()).trim(); if(t) $("tmapKey").value=t; else throw 0; }catch(e){ $("tmapKey").focus(); $("keyState").textContent="(입력칸을 길게 눌러 붙여넣어 주세요)"; } };
 $("btnSaveKey").onclick=()=>{ Keys.tmap=$("tmapKey").value.trim(); showKeyState(); $("settings").classList.add("hidden"); };
 showKeyState();
 $("q").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); doSearch(); } });

@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0c10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Pit Wall Nav</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+:root{
+  --bg:#0b0c10;--panel:#15171e;--panel2:#1d2029;--line:#2a2e3a;
+  --text:#f3f4f7;--muted:#8b90a0;--accent:#e10600;--accent2:#ff5a36;
+  --green:#22d36b;--purple:#b14cff;--yellow:#ffd400;--blue:#2f7bff;
+  --track:#3a3f4d;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0c10;--panel:#15171e;--panel2:#1d2029;--text:#f3f4f7}}
+:root[data-theme="dark"]{--bg:#0b0c10;--panel:#15171e;--panel2:#1d2029;--text:#f3f4f7}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  -webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+.app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:10px;
+  padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 16px)}
+header{display:flex;align-items:center;justify-content:space-between}
+.brand{font-weight:900;font-style:italic;letter-spacing:.5px;font-size:18px}
+.brand b{color:var(--accent)}
+.pill{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:3px 9px}
+.pill.live{color:var(--green);border-color:var(--green)}
+.lights{display:grid;grid-template-columns:repeat(15,1fr);gap:4px;padding:8px;background:var(--panel);border-radius:12px}
+.lights i{display:block;aspect-ratio:1;border-radius:50%;background:#262a35;transition:background .05s}
+.lights i.g{background:var(--green);box-shadow:0 0 8px var(--green)}
+.lights i.r{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.lights i.b{background:var(--blue);box-shadow:0 0 8px var(--blue)}
+.dash{display:grid;grid-template-columns:1fr auto;gap:10px}
+.speed{background:var(--panel);border-radius:14px;padding:12px 14px;display:flex;align-items:flex-end;gap:8px}
+.speed .v{font-size:64px;font-weight:900;line-height:.9;font-variant-numeric:tabular-nums}
+.speed .u{color:var(--muted);font-size:13px;margin-bottom:6px}
+.speed.over .v{color:var(--yellow)}
+.gear{background:var(--panel);border-radius:14px;padding:10px 16px;text-align:center;min-width:92px}
+.gear .g{font-size:52px;font-weight:900;line-height:1}
+.gear .r{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.next{background:linear-gradient(135deg,var(--panel2),var(--panel));border-left:5px solid var(--accent);border-radius:14px;padding:12px 14px;display:flex;gap:14px;align-items:center}
+.next .ico{width:56px;height:56px;flex:none;display:grid;place-items:center;background:#0006;border-radius:12px}
+.next .ico svg{width:40px;height:40px}
+.next .d{font-size:30px;font-weight:900;font-variant-numeric:tabular-nums}
+.next .t{color:var(--muted);font-size:14px}
+.next .turnno{font-size:11px;font-weight:800;color:var(--accent2);letter-spacing:1px}
+.radio{background:var(--panel);border-radius:14px;padding:10px 12px;min-height:64px;display:flex;gap:10px;align-items:flex-start}
+.radio .badge{flex:none;font-size:10px;font-weight:900;background:var(--accent);color:#fff;border-radius:4px;padding:3px 6px;margin-top:2px}
+.radio.on .badge{animation:blink .4s infinite alternate}
+@keyframes blink{to{background:#7a0300}}
+.radio .msg{font-size:16px;line-height:1.4}
+.radio .who{font-size:11px;color:var(--muted);margin-bottom:2px}
+.flag{display:none;background:var(--yellow);color:#111;font-weight:900;text-align:center;border-radius:10px;padding:8px}
+.flag.show{display:block}
+canvas{width:100%;height:220px;background:var(--panel);border-radius:14px;display:block}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats div{background:var(--panel);border-radius:10px;padding:8px;text-align:center}
+.stats b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.stats span{font-size:11px;color:var(--muted)}
+.controls{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:8px}
+button{font:inherit;font-weight:800;border:0;border-radius:12px;padding:14px;flex:1;background:var(--panel2);color:var(--text);cursor:pointer}
+button.primary{background:var(--accent);color:#fff}
+button:disabled{opacity:.45}
+input,select{font:inherit;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px;flex:1;min-width:0}
+.results{display:flex;flex-direction:column;gap:6px}
+.results button{text-align:left;font-weight:500;font-size:14px;padding:10px 12px}
+.note{font-size:12px;color:var(--muted);line-height:1.5}
+.hidden{display:none!important}
+.tabs{display:flex;background:var(--panel);border-radius:12px;padding:4px;gap:4px}
+.tabs button{padding:10px;background:transparent;color:var(--muted)}
+.tabs button.on{background:var(--panel2);color:var(--text)}
+label.small{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">PIT WALL <b>NAV</b></div>
+    <span class="pill" id="status">대기 중</span>
+  </header>
+
+  <div class="lights" id="lights"></div>
+
+  <div class="dash">
+    <div class="speed" id="speedBox"><div class="v" id="spd">0</div><div class="u">km/h</div></div>
+    <div class="gear"><div class="g" id="gear">N</div><div class="r" id="rpm">0 rpm</div></div>
+  </div>
+
+  <div class="flag" id="flag">🟨 YELLOW FLAG · 감속하세요</div>
+
+  <div class="next">
+    <div class="ico" id="ico"></div>
+    <div>
+      <div class="turnno" id="turnno">GRID</div>
+      <div class="d" id="ndist">—</div>
+      <div class="t" id="ntext">출발 대기</div>
+    </div>
+  </div>
+
+  <div class="radio" id="radio">
+    <span class="badge">RADIO</span>
+    <div><div class="who">레이스 엔지니어</div><div class="msg" id="msg">라디오 체크. 준비되면 출발해.</div></div>
+  </div>
+
+  <canvas id="map"></canvas>
+
+  <div class="stats">
+    <div><b id="sLap">00:00</b><span>주행 시간</span></div>
+    <div><b id="sLeft">—</b><span>남은 거리</span></div>
+    <div><b id="sSector">S1</b><span>섹터</span></div>
+  </div>
+
+  <div class="controls">
+    <div class="tabs"><button id="tabSim" class="on">시뮬레이션</button><button id="tabReal">실제 주행</button></div>
+
+    <div id="simPanel" class="controls">
+      <div class="row">
+        <select id="simSpeed"><option value="1">1배속</option><option value="2" selected>2배속</option><option value="4">4배속</option></select>
+        <button class="primary" id="btnSim">가상 주행 시작</button>
+      </div>
+      <p class="note">책상에서도 엔진음과 무전 안내를 들어볼 수 있는 가상 코스예요. 소리를 켜고 눌러주세요.</p>
+    </div>
+
+    <div id="realPanel" class="controls hidden">
+      <div class="row"><input id="q" placeholder="목적지 검색 (예: 여의도 한강공원)" enterkeyhint="search"><button id="btnSearch" style="flex:none">검색</button></div>
+      <div class="results" id="results"></div>
+      <label class="small">제한속도 경고 <select id="limit" style="flex:none"><option>30</option><option>50</option><option selected>60</option><option>80</option><option>100</option></select> km/h</label>
+      <p class="note">GPS와 경로 탐색(OpenStreetMap·OSRM)을 쓰려면 HTTPS 주소에서 열어야 해요. 주행 중엔 화면을 켜두세요.</p>
+    </div>
+
+    <div class="row">
+      <button id="btnEngine">엔진음 켜짐</button>
+      <button id="btnStop" disabled>정지</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= 유틸 ================= */
+const $ = id => document.getElementById(id);
+const R = 6371000, toRad = d => d*Math.PI/180;
+function hav(a,b){const dLat=toRad(b[0]-a[0]),dLng=toRad(b[1]-a[1]);const s=Math.sin(dLat/2)**2+Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(s));}
+function bearing(a,b){const y=Math.sin(toRad(b[1]-a[1]))*Math.cos(toRad(b[0]));const x=Math.cos(toRad(a[0]))*Math.sin(toRad(b[0]))-Math.sin(toRad(a[0]))*Math.cos(toRad(b[0]))*Math.cos(toRad(b[1]-a[1]));return (Math.atan2(y,x)*180/Math.PI+360)%360;}
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+function fmtDist(m){ if(m>=1000) return (m/1000).toFixed(1)+"km"; return Math.max(0,Math.round(m/10)*10)+"m"; }
+function sayDist(m){ if(m>=1000) return (Math.round(m/100)/10).toString().replace(".0","")+"킬로미터"; return (Math.round(m/50)*50||50)+"미터"; }
+function fmtTime(s){s=Math.floor(s);return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");}
+
+/* ================= 엔진음 합성 (오리지널, Web Audio) ================= */
+const Engine = {
+  ctx:null, on:true, gearMax:[0,18,32,46,60,74,90,110,140],
+  rpm:0, gear:0, lastGear:0,
+  init(){
+    if(this.ctx) return;
+    const C = this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+    this.master = C.createGain(); this.master.gain.value = 0; this.master.connect(C.destination);
+    this.duck = C.createGain(); this.duck.gain.value = 1; this.duck.connect(this.master);
+    // 비선형 왜곡으로 거친 V6 느낌
+    const shaper = C.createWaveShaper(); const n=1024, curve=new Float32Array(n);
+    for(let i=0;i<n;i++){const x=i/n*2-1;curve[i]=Math.tanh(2.6*x);} shaper.curve=curve;
+    this.lp = C.createBiquadFilter(); this.lp.type="lowpass"; this.lp.Q.value=4;
+    shaper.connect(this.lp); this.lp.connect(this.duck);
+    const mk=(type,g)=>{const o=C.createOscillator();o.type=type;const gg=C.createGain();gg.gain.value=g;o.connect(gg);gg.connect(shaper);o.start();return o;};
+    this.o1=mk("sawtooth",.35); this.o2=mk("square",.12); this.o3=mk("sawtooth",.22); this.o4=mk("triangle",.18);
+    // 배기 잡음
+    const buf=C.createBuffer(1,C.sampleRate,C.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    const ns=C.createBufferSource();ns.buffer=buf;ns.loop=true;
+    this.nbp=C.createBiquadFilter();this.nbp.type="bandpass";this.nbp.Q.value=3;
+    this.ng=C.createGain();this.ng.gain.value=.05;ns.connect(this.nbp);this.nbp.connect(this.ng);this.ng.connect(this.duck);ns.start();
+    this.noiseBuf=buf;
+  },
+  resume(){ this.init(); if(this.ctx.state!=="running") this.ctx.resume(); },
+  setRunning(run){ if(!this.ctx) return; const t=this.ctx.currentTime; this.master.gain.setTargetAtTime(run&&this.on?.22:0,t,.3); },
+  pop(){ // 변속 시 '딱' 소리
+    if(!this.ctx||!this.on) return; const C=this.ctx,t=C.currentTime;
+    const s=C.createBufferSource();s.buffer=this.noiseBuf;const f=C.createBiquadFilter();f.type="highpass";f.frequency.value=900;
+    const g=C.createGain();g.gain.setValueAtTime(.35,t);g.gain.exponentialRampToValueAtTime(.001,t+.09);
+    s.connect(f);f.connect(g);g.connect(this.master);s.start(t);s.stop(t+.1);
+    this.duck.gain.setValueAtTime(.35,t); this.duck.gain.setTargetAtTime(this.speaking?.3:1,t+.05,.04);
+  },
+  update(kmh, throttle){
+    // 속도 -> 기어/RPM (공도 속도에 맞춰 8단 압축)
+    let g=1; while(g<8 && kmh>this.gearMax[g]) g++;
+    if(kmh<1){ g=0; }
+    const lo=g>1?this.gearMax[g-1]:0, hi=this.gearMax[g]||20;
+    let rpm = g===0 ? 4200 : 5200 + Math.min(1,(kmh-lo)/(hi-lo))*6800 + throttle*400;
+    this.rpm += (rpm-this.rpm)*.35; this.gear=g;
+    if(g!==this.lastGear && this.lastGear!==0 && g!==0) this.pop();
+    this.lastGear=g;
+    if(!this.ctx) return;
+    const t=this.ctx.currentTime, f=this.rpm/60*3; // V6 점화 주파수
+    this.o1.frequency.setTargetAtTime(f,t,.03); this.o2.frequency.setTargetAtTime(f*2,t,.03);
+    this.o3.frequency.setTargetAtTime(f*.5,t,.03); this.o4.frequency.setTargetAtTime(f*3.01,t,.03);
+    this.lp.frequency.setTargetAtTime(900+this.rpm*.25+throttle*1500,t,.05);
+    this.nbp.frequency.setTargetAtTime(f*2,t,.05); this.ng.gain.setTargetAtTime(.03+throttle*.06,t,.05);
+  },
+  setDuck(on){ this.speaking=on; if(!this.ctx) return; this.duck.gain.setTargetAtTime(on?.3:1,this.ctx.currentTime,.1); },
+  chirp(kind){ // 무전 시작/끝 효과음
+    if(!this.ctx) return; const C=this.ctx,t=C.currentTime;
+    const o=C.createOscillator();o.type="square";const g=C.createGain();
+    o.frequency.setValueAtTime(kind==="in"?1450:1100,t); if(kind==="in") o.frequency.setValueAtTime(1850,t+.06);
+    g.gain.setValueAtTime(.06,t);g.gain.setValueAtTime(0,t+.13);o.connect(g);g.connect(C.destination);o.start(t);o.stop(t+.14);
+    const s=C.createBufferSource();s.buffer=this.noiseBuf;const f=C.createBiquadFilter();f.type="bandpass";f.frequency.value=2200;f.Q.value=.8;
+    const ng=C.createGain();ng.gain.setValueAtTime(.12,t+.12);ng.gain.exponentialRampToValueAtTime(.001,t+.32);
+    s.connect(f);f.connect(ng);ng.connect(C.destination);s.start(t+.12,Math.random());s.stop(t+.34);
+  }
+};
+
+/* ================= 팀 라디오 (TTS) ================= */
+const Radio = {
+  q:[], busy:false, voice:null,
+  init(){
+    const pickV=()=>{const vs=speechSynthesis.getVoices();this.voice=vs.find(v=>/ko[-_]KR/i.test(v.lang))||null;};
+    pickV(); speechSynthesis.onvoiceschanged=pickV;
+  },
+  // text: 문자열 또는 말할 시점에 문구를 만드는 함수(null이면 건너뜀). prio 2 = 경로 안내
+  say(text, urgent=false, prio=1){
+    if(urgent){ this.q=[]; speechSynthesis.cancel(); this.busy=false; }
+    if(prio>=2) this.q=this.q.filter(x=>x.prio>=2);
+    else if(this.q.length>1) return;
+    this.q.push({text,prio}); this.next();
+  },
+  next(){
+    if(this.busy) return;
+    let text=null;
+    while(this.q.length && !text){ const it=this.q.shift(); text=typeof it.text==="function"?it.text():it.text; }
+    if(!text) return;
+    this.busy=true;
+    $("msg").textContent=text; $("radio").classList.add("on");
+    Engine.setDuck(true); Engine.chirp("in");
+    setTimeout(()=>{
+      const u=new SpeechSynthesisUtterance(text.replace(/[—…]/g,", "));
+      u.lang="ko-KR"; if(this.voice) u.voice=this.voice; u.rate=1.12; u.pitch=.95;
+      let done=false; const fin=()=>{ if(done) return; done=true; Engine.chirp("out"); $("radio").classList.remove("on"); Engine.setDuck(false);
+        setTimeout(()=>{this.busy=false;this.next();},350); };
+      u.onend=fin; u.onerror=fin; setTimeout(fin, 2500+text.length*160); // 안전장치
+      speechSynthesis.speak(u);
+    },260);
+  }
+};
+
+/* ================= 안내 문구 ================= */
+const TURN = {
+  "left":"좌회전","right":"우회전","slight left":"왼쪽 방향","slight right":"오른쪽 방향",
+  "sharp left":"급좌회전","sharp right":"급우회전","uturn":"유턴","straight":"직진"
+};
+/* 상황별 F1 무전 문구. stage: far / near / now */
+const SIDE=m=>(m.modifier||"").includes("left")?"왼쪽":"오른쪽";
+const CORNER={"left":"왼쪽 코너","right":"오른쪽 코너","slight left":"왼쪽 완만한 커브","slight right":"오른쪽 완만한 커브",
+  "sharp left":"왼쪽 헤어핀","sharp right":"오른쪽 헤어핀","uturn":"헤어핀, 유턴","straight":"직진"};
+const ORD=["첫 번째","두 번째","세 번째","네 번째","다섯 번째"];
+function callout(m,stage,d,n){
+  const side=SIDE(m), corner=CORNER[m.modifier]||"코너", plain=TURN[m.modifier]||"직진";
+  const ex=m.exit?(ORD[m.exit-1]||`${m.exit}번째`):"";
+  const T={
+    "on ramp":{
+      far:[`${d} 앞 피트 레인 엑시트. 고속도로 본선 합류 준비해.`,`턴 ${n}, 고속도로 진입로가 ${d} 앞이야. 트랙 복귀 준비.`],
+      near:[`곧 피트 엑시트. ${side} 진입로로 들어가.`,`진입로 ${d}. ${side} 차선으로 붙어.`],
+      now:[`피트 엑시트! 본선 합류, 미러 체크!`,`지금 진입! 합류 간격 확인해.`]},
+    "off ramp":{
+      far:[`박스, 박스. 박스, 박스. ${d} 앞 출구로 피트인 할 거야.`,`이번 랩에 박스야. ${d} 앞 ${side} 출구로 나간다.`],
+      near:[`피트 엔트리 접근. ${d} 앞 ${side} 출구.`,`박스 박스! ${d} 남았어, ${side} 차선 유지.`],
+      now:[`박스 박스! 지금 출구로 피트인!`,`피트 엔트리! 지금 빠져나가!`]},
+    "merge":{
+      far:[`${d} 앞 합류 구간. 레이스 재개 준비.`],
+      near:[`곧 합류야. ${side} 차량 체크.`],
+      now:[`합류! 옆 차 간격 체크!`]},
+    "fork":{
+      far:[`${d} 앞 갈림길. 레이싱 라인은 ${side}이야.`,`턴 ${n}, 갈림길에서 ${side}으로 간다. ${d} 남았어.`],
+      near:[`갈림길 ${d}. ${side} 라인 유지.`],
+      now:[`${side} 라인! 지금!`]},
+    "roundabout":{
+      far:[`${d} 앞 시케인. 회전교차로에서 ${ex} 출구야.`,`턴 ${n}은 시케인이야. 회전교차로 ${ex} 출구, ${d} 앞.`],
+      near:[`시케인 접근. ${ex} 출구 잊지 마.`],
+      now:[`시케인 진입! ${ex} 출구로 빠져.`]},
+    "end of road":{
+      far:[`${d} 앞 도로 끝에서 ${corner}.`],
+      near:[`브레이킹 포인트. 도로 끝에서 ${corner}.`],
+      now:[`턴 인! ${plain}!`]},
+    "default":{
+      far:[`턴 ${n} 접근 중. ${d} 앞 ${corner}.`,`다음은 턴 ${n}, ${corner}. ${d} 남았어.`,`${d} 앞 ${corner}${m.name?`, ${m.name} 방향`:""}. 라인 미리 잡아둬.`],
+      near:[`브레이킹 포인트. ${d} 앞 ${corner}.`,`곧 ${corner}. ${d}.`],
+      now:[`턴 인! ${plain}!`,`지금 ${plain}! 좋아, 좋아.`,`에이펙스 노려. ${plain}!`]}
+  };
+  T.rotary=T.roundabout;
+  return pick((T[m.type]||T.default)[stage]);
+}
+function turnLabel(m){
+  if(m.type==="arrive") return "목적지";
+  if(m.type==="roundabout"||m.type==="rotary") return "회전교차로"+(m.exit?` ${m.exit}번째 출구`:"");
+  if(m.type==="merge") return "본선 합류";
+  if(m.type==="on ramp") return "진입로로 "+(TURN[m.modifier]||"진입");
+  if(m.type==="off ramp") return "출구로 "+(TURN[m.modifier]||"진출");
+  if(m.type==="fork") return (m.modifier||"").includes("left")?"갈림길에서 왼쪽":"갈림길에서 오른쪽";
+  return TURN[m.modifier]||"직진";
+}
+const Lines = {
+  start:["라이트 아웃! 레이스 시작이야. 첫 코너까지 집중해.","좋아, 그린 라이트. 출발하자. 클린하게 가자고.","라디오 체크 완료. 레이스 모드 온. 가자!"],
+  after:["좋은 코너였어.","나이스. 페이스 유지해.","완벽한 라인이야."],
+  afterType:{
+    "on ramp":["본선 합류 완료. 클린 에어야, 리듬 찾아.","트랙 복귀 성공. 간격 좋아."],
+    "off ramp":["피트인 완료. 시내 구간이야, 페이스 낮춰.","박스 성공. 여기서부턴 시가지 서킷이야."],
+    "merge":["합류 깔끔했어."],
+    "roundabout":["시케인 통과. 좋아."],"rotary":["시케인 통과. 좋아."]
+  },
+  finalLap:(d)=>pick([`파이널 랩이야. 목적지까지 ${d}. 체커기가 보인다.`,`마지막 섹터. 피니시 라인 ${d} 앞. 끝까지 집중해.`]),
+  finish:(time)=>pick([`체커기! 목적지 도착. 피 원, 피 원! 기록은 ${time}. 정말 대단한 레이스였어.`,`체커기 받았어! 도착이야. 기록 ${time}. 팀 전체가 자랑스러워해.`]),
+  sector:(n)=>pick([`섹터 ${n} 통과. 퍼플 섹터야!`,`섹터 ${n} 그린. 페이스 좋아.`,`섹터 ${n} 클리어. 이대로만 가자.`]),
+  chatter:["페이스 좋아. 타이어 온도도 정상이야.","갭 유지 중. 침착하게.","연료 세이브 모드 필요 없어. 지금처럼만.","노면 상태 좋아. 리듬 타고 있어."],
+  yellow:["옐로 플래그, 옐로 플래그. 제한속도 넘었어. 페이스 낮춰.","속도 줄여. 여기 감속 구간이야."],
+  green:["그린 플래그. 좋아, 그대로 유지."],
+  offroute:["트랙 이탈. 플랜 B로 간다, 경로 다시 계산할게.","루트 바뀌었어. 플랜 B 계산 중."],
+  rerouted:["새 전략 준비 완료. 다음 지시 따라와."]
+};
+
+/* ================= 데모 코스 (가상) ================= */
+function demoRoute(){
+  // 여의도 일대 가상 루프 (실제 도로가 아닌 데모용 좌표)
+  const pts=[[37.5285,126.9195],[37.5262,126.9235],[37.5240,126.9273],[37.5218,126.9311],[37.5236,126.9338],[37.5255,126.9366],
+             [37.5283,126.9335],[37.5306,126.9306],[37.5322,126.9282],[37.5300,126.9250],[37.5312,126.9228],[37.5296,126.9212]];
+  const r=buildRouteFromGeometry(pts), M=r.maneuvers;
+  // 데모용으로 고속도로 진입·출구·회전교차로 상황을 섞음
+  if(M[1]) Object.assign(M[1],{type:"on ramp",name:"올림픽대로"});
+  if(M[2]) Object.assign(M[2],{type:"off ramp",name:"여의도 출구"});
+  if(M[3]) Object.assign(M[3],{type:"roundabout",exit:2});
+  return r;
+}
+function buildRouteFromGeometry(pts){
+  const r=prepCoords(pts); r.maneuvers=[];
+  for(let i=1;i<pts.length-1;i++){
+    let d=((bearing(pts[i],pts[i+1])-bearing(pts[i-1],pts[i])+540)%360)-180;
+    if(Math.abs(d)<25) continue;
+    const a=Math.abs(d), side=d<0?"left":"right";
+    r.maneuvers.push({type:"turn",modifier:a>140?"uturn":a>100?"sharp "+side:a<50?"slight "+side:side,along:r.cum[i],name:"",loc:pts[i]});
+  }
+  r.maneuvers.push({type:"arrive",modifier:"",along:r.total,name:"",loc:pts[pts.length-1]});
+  return r;
+}
+function prepCoords(pts){
+  const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1],pts[i]));
+  return {coords:pts,cum,total:cum[cum.length-1]};
+}
+function posAt(r,s){
+  let i=1; while(i<r.cum.length-1 && r.cum[i]<s) i++;
+  const a=r.coords[i-1],b=r.coords[i],seg=r.cum[i]-r.cum[i-1]||1,t=Math.max(0,Math.min(1,(s-r.cum[i-1])/seg));
+  return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+}
+function project(r,p){ // 현재 위치를 경로 위로 투영 -> (경로상 거리, 이탈 거리)
+  const k=Math.cos(toRad(p[0]))*111320, m=110540;
+  let best={d:1e9,along:0};
+  for(let i=1;i<r.coords.length;i++){
+    const a=r.coords[i-1],b=r.coords[i];
+    const ax=(a[1]-p[1])*k, ay=(a[0]-p[0])*m, bx=(b[1]-p[1])*k, by=(b[0]-p[0])*m;
+    const dx=bx-ax, dy=by-ay, L=dx*dx+dy*dy||1; let t=-(ax*dx+ay*dy)/L; t=Math.max(0,Math.min(1,t));
+    const x=ax+dx*t,y=ay+dy*t,d=Math.hypot(x,y);
+    if(d<best.d) best={d,along:r.cum[i-1]+t*(r.cum[i]-r.cum[i-1])};
+  }
+  return best;
+}
+
+/* ================= 실제 경로 (OSRM) / 검색 (Nominatim) ================= */
+async function osrmRoute(from,to){
+  const url=`https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson&steps=true`;
+  const j=await (await fetch(url)).json();
+  if(!j.routes||!j.routes.length) throw new Error("경로 없음");
+  const rt=j.routes[0], r=prepCoords(rt.geometry.coordinates.map(c=>[c[1],c[0]]));
+  r.maneuvers=[]; let acc=0;
+  for(const st of rt.legs[0].steps){
+    const mv=st.maneuver;
+    if(mv.type!=="depart" && !(mv.type==="new name"||(mv.type==="continue"&&(!mv.modifier||mv.modifier==="straight")))){
+      r.maneuvers.push({type:mv.type,modifier:mv.modifier||"",along:mv.type==="arrive"?r.total:project(r,[mv.location[1],mv.location[0]]).along,name:st.name||"",exit:mv.exit,loc:[mv.location[1],mv.location[0]]});
+    }
+    acc+=st.distance;
+  }
+  if(!r.maneuvers.length||r.maneuvers[r.maneuvers.length-1].type!=="arrive") r.maneuvers.push({type:"arrive",modifier:"",along:r.total,name:"",loc:r.coords[r.coords.length-1]});
+  return r;
+}
+async function geocode(q){
+  const url=`https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=kr&accept-language=ko&q=${encodeURIComponent(q)}`;
+  return (await fetch(url)).json();
+}
+
+/* ================= 레이스 상태 ================= */
+const S = { route:null, mode:null, s:0, v:0, t0:0, elapsed:0, mi:0, flags:{}, sector:1, lastTalk:0,
+  over:false, overSince:0, limit:60, offCount:0, rerouting:false, dest:null, watchId:null, timer:null, wake:null, lastFix:null, done:false };
+
+function resetRace(route){
+  Object.assign(S,{route,s:0,v:0,t0:performance.now(),elapsed:0,mi:0,flags:{},sector:1,lastTalk:performance.now(),over:false,offCount:0,done:false,lastTurnSaid:-1});
+}
+
+function announce(){
+  const r=S.route; if(!r||S.done) return;
+  while(S.mi<r.maneuvers.length-1 && r.maneuvers[S.mi].along < S.s-5){ // 지나간 회전
+    const pm=r.maneuvers[S.mi];
+    if(Lines.afterType[pm.type]) Radio.say(pick(Lines.afterType[pm.type]));
+    else if(pm.type!=="arrive" && Math.random()<.4) Radio.say(pick(Lines.after));
+    if(S.mode==="sim") S.limit=pm.type==="on ramp"?100:pm.type==="off ramp"?60:S.limit;
+    S.mi++;
+  }
+  const m=r.maneuvers[S.mi], d=m.along-S.s, n=S.mi+1, key=S.mi, f=S.flags[key]||(S.flags[key]={});
+  const label=turnLabel(m), prevAlong=S.mi>0?r.maneuvers[S.mi-1].along:0, gap=m.along-prevAlong;
+  const v=Math.max(S.v,5); // m/s
+  const nearTh=Math.max(120,v*9), nowTh=Math.max(30,v*2.5);
+  if(m.type==="arrive"){
+    if(!f.box && d<350 && r.total>600){ f.box=1; Radio.say(()=>S.done?null:Lines.finalLap(sayDist(m.along-S.s)),false,2); }
+    if(d<15){ finish(); }
+  } else {
+    // 말하는 순간의 실제 남은 거리로 문구를 만들고, 이미 늦었으면 버림
+    const live=(make,minD)=>()=>{ if(S.mi!==key) return null; const dd=m.along-S.s; return dd>minD?make(sayDist(dd)):null; };
+    if(!f.far && d<550 && d>nearTh+80 && gap>400){ f.far=1; Radio.say(live(ds=>callout(m,"far",ds,n),nearTh),false,2); }
+    else if(!f.near && d<=nearTh && d>nowTh+15){ f.near=f.far=1; Radio.say(live(ds=>callout(m,"near",ds,n),nowTh),false,2); }
+    else if(!f.now && d<=nowTh){ f.near=f.far=f.now=1; Radio.say(callout(m,"now","",n),true,3); }
+  }
+  // 섹터
+  const sec=Math.min(3,1+Math.floor(S.s/(r.total/3)));
+  if(sec>S.sector){ S.sector=sec; Radio.say(Lines.sector(sec-1)); }
+  // 잡담 (긴 직선)
+  const now=performance.now();
+  if(d>700 && now-S.lastTalk>60000/(S.mode==="sim"?+$("simSpeed").value:1) && !Radio.busy){ Radio.say(pick(Lines.chatter)); }
+  if(Radio.busy) S.lastTalk=now;
+  // 과속 = 옐로 플래그
+  const kmh=S.v*3.6, over=kmh>S.limit+3;
+  if(over && !S.over){ S.over=true; if(now-(S.lastYellow||0)>30000){ S.lastYellow=now; Radio.say(pick(Lines.yellow),false,2); } }
+  if(!over && S.over && kmh<S.limit-2){ S.over=false; }
+}
+
+function finish(){
+  if(S.done) return; S.done=true;
+  Radio.say(Lines.finish(fmtTime(S.elapsed).replace(":","분 ")+"초"),true);
+  $("turnno").textContent="CHEQUERED"; $("ndist").textContent="🏁 도착"; $("ntext").textContent="수고했어요!";
+  setTimeout(()=>{Engine.setRunning(false);},1500);
+  setStatus("완주",false); setTimeout(stopAll,4000);
+}
+
+/* ================= 시뮬레이션 ================= */
+function startSim(){
+  stopAll(true);
+  const route=demoRoute(); resetRace(route); S.mode="sim"; S.limit=60;
+  boot();
+  let last=performance.now();
+  S.timer=setInterval(()=>{
+    const now=performance.now(), mult=+$("simSpeed").value, dt=(now-last)/1000*mult; last=now;
+    const m=S.route.maneuvers[S.mi], d=m.along-S.s;
+    const vTurn=m.type==="arrive"?0:/ramp/.test(m.type)?12:(m.modifier.includes("slight")?11:6.5);
+    // 고속도로 구간(진입~출구) ~90km/h, 시내 ~58km/h, 첫 직선만 66km/h로 옐로 플래그 시연
+    const vmax=m.type==="off ramp"?25:S.mi===0?18.5:16;
+    const target=Math.min(vmax,Math.sqrt(vTurn*vTurn+2*2.8*Math.max(0,d-8)));
+    const thr=target>S.v+.3?1:0;
+    S.v+= target>S.v ? Math.min(2.6*dt,target-S.v) : -Math.min(4*dt,S.v-target);
+    if(m.type==="arrive"&&d<12) S.v=Math.max(0,S.v-6*dt);
+    S.s=Math.min(S.route.total,S.s+S.v*dt);
+    S.elapsed+=dt; S.throttle=thr;
+    if(S.route.total-S.s<3) S.v=0;
+    tick();
+  },100);
+}
+
+/* ================= 실제 주행 ================= */
+async function startReal(dest){
+  stopAll(true);
+  if(!("geolocation" in navigator)){ Radio.say("GPS를 쓸 수 없는 환경이야."); return; }
+  S.mode="real"; S.dest=dest; S.limit=+$("limit").value;
+  setStatus("GPS 확인 중",false); $("msg").textContent="GPS 신호 찾는 중…";
+  Engine.resume();
+  const first=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:true,timeout:15000})).catch(e=>null);
+  if(!first){ $("msg").textContent="위치 권한이 없거나 GPS를 못 잡았어요. HTTPS 주소에서 위치 권한을 허용해 주세요."; setStatus("GPS 실패",false); return; }
+  const here=[first.coords.latitude,first.coords.longitude];
+  try{ resetRace(await osrmRoute(here,dest)); }
+  catch(e){ $("msg").textContent="경로 서버에 연결하지 못했어요. 네트워크를 확인해 주세요."; setStatus("경로 실패",false); return; }
+  S.mode="real"; boot();
+  S.lastFix={p:here,t:performance.now()};
+  S.watchId=navigator.geolocation.watchPosition(onFix,()=>{}, {enableHighAccuracy:true,maximumAge:1000});
+  let last=performance.now();
+  S.timer=setInterval(()=>{const now=performance.now();S.elapsed+=(now-last)/1000;last=now;tick();},200);
+}
+async function onFix(pos){
+  if(!S.route||S.done) return;
+  const p=[pos.coords.latitude,pos.coords.longitude], now=performance.now();
+  let v=pos.coords.speed; if(v==null||isNaN(v)){ v=S.lastFix?hav(S.lastFix.p,p)/Math.max(.5,(now-S.lastFix.t)/1000):0; }
+  S.throttle=v>S.v+.5?1:0; S.v=S.v*.4+v*.6; S.lastFix={p,t:now};
+  const pr=project(S.route,p);
+  if(pr.d>45 && pos.coords.accuracy<40){ S.offCount++; } else { S.offCount=0; S.s=Math.max(S.s-20,pr.along); }
+  if(S.offCount>=3 && !S.rerouting){
+    S.rerouting=true; Radio.say(pick(Lines.offroute),true);
+    try{ const r=await osrmRoute(p,S.dest); const el=S.elapsed; resetRace(r); S.elapsed=el; Radio.say(pick(Lines.rerouted)); }catch(e){}
+    S.rerouting=false; S.offCount=0;
+  }
+}
+
+/* ================= 공통 ================= */
+async function boot(){
+  Engine.resume(); Engine.setRunning(true);
+  try{ if("wakeLock" in navigator) S.wake=await navigator.wakeLock.request("screen"); }catch(e){}
+  $("btnStop").disabled=false; setStatus("LIVE",true);
+  Radio.say(pick(Lines.start),true);
+}
+function stopAll(silent){
+  clearInterval(S.timer); S.timer=null;
+  if(S.watchId!=null){ navigator.geolocation.clearWatch(S.watchId); S.watchId=null; }
+  if(S.wake){ S.wake.release().catch(()=>{}); S.wake=null; }
+  if(!silent){ speechSynthesis.cancel(); Radio.q=[]; Radio.busy=false; $("radio").classList.remove("on"); Engine.setDuck(false); }
+  Engine.setRunning(false); S.v=0; render();
+  $("btnStop").disabled=true; if(!S.done) setStatus("대기 중",false);
+}
+function setStatus(t,live){ const el=$("status"); el.textContent=t; el.classList.toggle("live",!!live); }
+function tick(){ Engine.update(S.v*3.6,S.throttle||0); announce(); render(); }
+
+/* ================= 화면 ================= */
+const lights=$("lights"); for(let i=0;i<15;i++) lights.appendChild(document.createElement("i"));
+const arrows={
+  left:"M30 34V18H14 M14 18l8-8 M14 18l8 8",right:"M10 34V18h16 M26 18l-8-8 M26 18l-8 8",
+  "slight left":"M24 34V20L14 10 M14 10v9 M14 10h9","slight right":"M16 34V20l10-10 M26 10v9 M26 10h-9",
+  uturn:"M26 34V16a6 6 0 0 0-12 0v6 M14 22l-5-5 M14 22l5-5",straight:"M20 34V8 M20 8l-8 8 M20 8l8 8",
+  arrive:"M12 34V8 M12 8h16l-4 6 4 6H12"
+};
+function iconFor(m){ let k=m.type==="arrive"?"arrive":(m.modifier||"straight"); if(k.startsWith("sharp")) k=k.replace("sharp ",""); return arrows[k]||arrows.straight; }
+function render(){
+  const kmh=Math.round(S.v*3.6);
+  $("spd").textContent=kmh; $("speedBox").classList.toggle("over",!!S.over); $("flag").classList.toggle("show",!!S.over&&!!S.timer);
+  $("gear").textContent=S.timer?(Engine.gear||"N"):"N"; $("rpm").textContent=(S.timer?Math.round(Engine.rpm/100)*100:0).toLocaleString()+" rpm";
+  const frac=S.timer?Math.max(0,(Engine.rpm-5000)/7000):0, lit=Math.round(frac*15);
+  [...lights.children].forEach((el,i)=>{el.className=i<lit?(lit>=14?"b":i<5?"g":i<10?"r":"b"):"";});
+  const r=S.route;
+  if(r&&!S.done){
+    const m=r.maneuvers[S.mi];
+    $("ndist").textContent=fmtDist(m.along-S.s); $("ntext").textContent=turnLabel(m)+(m.name?` · ${m.name}`:"");
+    $("turnno").textContent=m.type==="arrive"?"FINISH":`TURN ${S.mi+1}`;
+    $("ico").innerHTML=`<svg viewBox="0 0 40 40" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="${iconFor(m)}"/></svg>`;
+    $("sLeft").textContent=fmtDist(r.total-S.s); $("sSector").textContent="S"+S.sector;
+  }
+  $("sLap").textContent=fmtTime(S.elapsed);
+  drawMap();
+}
+const cv=$("map"), cx=cv.getContext("2d");
+function drawMap(){
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  if(cv.width!==W*dpr){cv.width=W*dpr;cv.height=H*dpr;}
+  cx.setTransform(dpr,0,0,dpr,0,0); cx.clearRect(0,0,W,H);
+  const r=S.route;
+  if(!r){ cx.fillStyle="#8b90a0";cx.font="13px sans-serif";cx.textAlign="center";cx.fillText("코스가 여기에 표시돼요",W/2,H/2);return; }
+  let mnLa=1e9,mxLa=-1e9,mnLo=1e9,mxLo=-1e9;
+  for(const p of r.coords){mnLa=Math.min(mnLa,p[0]);mxLa=Math.max(mxLa,p[0]);mnLo=Math.min(mnLo,p[1]);mxLo=Math.max(mxLo,p[1]);}
+  const k=Math.cos(toRad((mnLa+mxLa)/2)), sx=(mxLo-mnLo)*k||1e-6, sy=(mxLa-mnLa)||1e-6, pad=22;
+  const sc=Math.min((W-pad*2)/sx,(H-pad*2)/sy), ox=(W-sx*sc)/2, oy=(H-sy*sc)/2;
+  const P=p=>[ox+(p[1]-mnLo)*k*sc, oy+(mxLa-p[0])*sc];
+  const path=(upto)=>{cx.beginPath();r.coords.forEach((p,i)=>{if(upto!=null&&r.cum[i]>upto)return;const q=P(p);i?cx.lineTo(q[0],q[1]):cx.moveTo(q[0],q[1]);});};
+  cx.lineJoin=cx.lineCap="round";
+  path(); cx.strokeStyle="#3a3f4d"; cx.lineWidth=10; cx.stroke();
+  path(); cx.strokeStyle="#5a6070"; cx.lineWidth=2; cx.setLineDash([6,6]); cx.stroke(); cx.setLineDash([]);
+  if(S.s>0){ path(S.s); const c=P(posAt(r,S.s)); cx.lineTo(c[0],c[1]); cx.strokeStyle="#e10600"; cx.lineWidth=5; cx.stroke(); }
+  cx.font="bold 10px sans-serif"; cx.textAlign="center";
+  r.maneuvers.forEach((m,i)=>{ if(m.type==="arrive") return; const q=P(m.loc); cx.fillStyle=i===S.mi?"#ff5a36":"#8b90a0"; cx.fillText("T"+(i+1),q[0],q[1]-9); });
+  const e=P(r.coords[r.coords.length-1]); cx.font="16px sans-serif"; cx.fillText("🏁",e[0],e[1]+6);
+  const c=P(posAt(r,S.s)); cx.beginPath(); cx.arc(c[0],c[1],7,0,7); cx.fillStyle="#fff"; cx.shadowColor="#e10600"; cx.shadowBlur=14; cx.fill(); cx.shadowBlur=0;
+}
+
+/* ================= 이벤트 ================= */
+Radio.init();
+$("btnSim").onclick=()=>{ Engine.resume(); startSim(); };
+$("btnStop").onclick=()=>{ S.done=false; stopAll(); };
+$("btnEngine").onclick=()=>{ Engine.on=!Engine.on; $("btnEngine").textContent=Engine.on?"엔진음 켜짐":"엔진음 꺼짐"; Engine.setRunning(!!S.timer); };
+$("tabSim").onclick=()=>{ $("tabSim").classList.add("on");$("tabReal").classList.remove("on");$("simPanel").classList.remove("hidden");$("realPanel").classList.add("hidden"); };
+$("tabReal").onclick=()=>{ $("tabReal").classList.add("on");$("tabSim").classList.remove("on");$("realPanel").classList.remove("hidden");$("simPanel").classList.add("hidden"); };
+async function doSearch(){
+  const q=$("q").value.trim(); if(!q) return; const box=$("results"); box.innerHTML='<p class="note">검색 중…</p>';
+  try{
+    const res=await geocode(q); box.innerHTML="";
+    if(!res.length){ box.innerHTML='<p class="note">결과가 없어요. 다른 이름으로 찾아보세요.</p>'; return; }
+    res.forEach(x=>{ const b=document.createElement("button"); b.textContent=x.display_name; b.onclick=()=>{ Engine.resume(); box.innerHTML=""; startReal([+x.lat,+x.lon]); }; box.appendChild(b); });
+  }catch(e){ box.innerHTML='<p class="note">검색 서버에 연결하지 못했어요.</p>'; }
+}
+$("btnSearch").onclick=doSearch; $("q").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();});
+document.addEventListener("visibilitychange",async()=>{ if(document.visibilityState==="visible"&&S.timer&&"wakeLock" in navigator){ try{S.wake=await navigator.wakeLock.request("screen");}catch(e){} } });
+window.addEventListener("resize",drawMap);
+render();
+</script>
+</body>
+</html>

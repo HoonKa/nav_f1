@@ -24,6 +24,7 @@
 html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
 #map{position:fixed;inset:0;background:#111318}
+.leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6)}
 .leaflet-control-attribution{font-size:9px;background:#0009!important;color:#999!important}
 .leaflet-control-attribution a{color:#bbb!important}
 .leaflet-control-zoom{display:none}
@@ -446,8 +447,9 @@ async function geocode(q,near){
 /* ================= 지도 ================= */
 const SEOUL=[37.5663,126.9779];
 const map=L.map("map",{zoomControl:false,attributionControl:true}).setView(SEOUL,14);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
-  maxZoom:19,subdomains:"abcd",attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'}).addTo(map);
+// 키 없이 쓸 수 있는 OpenStreetMap 기본 지도 (CSS로 어둡게 반전)
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
 const carIcon=L.divIcon({className:"",html:'<div class="car"><svg id="carSvg" viewBox="0 0 44 44"><path d="M22 4 L36 38 L22 30 L8 38 Z" fill="#fff" stroke="#e10600" stroke-width="3" stroke-linejoin="round"/></svg></div>',iconSize:[0,0]});
 const car=L.marker(SEOUL,{icon:carIcon,interactive:false,zIndexOffset:1000});
 const destPin=L.marker(SEOUL,{icon:L.divIcon({className:"",html:'<div class="dest-pin">🏁</div>',iconSize:[0,0]}),interactive:false});
